@@ -1,0 +1,10 @@
+pyrogram
+tgcrypto
+aiohttp
+Pillow
+yt-dlp
+jdatetime
+arabic-reshaper
+python-bidi
+uvloop
+psutil
