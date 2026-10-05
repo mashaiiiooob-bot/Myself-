@@ -12837,6 +12837,17 @@ async def start_bot_instance (session_string ,phone ,uid ,font ,_retry_count =0 
             logger .warning ("Activation notification failed for %s: %s",uid ,type (exc ).__name__ )
 
 async def _start_bot_instance_now (session_string ,phone ,uid ,font ,_retry_count =0 ):
+    logger .info (f"[activation] start requested for {uid }")
+    try :
+        await _start_bot_instance_now_impl (session_string ,phone ,uid ,font ,_retry_count )
+    except asyncio .CancelledError :
+        raise 
+    except Exception as _e :
+        logger .exception (f"[activation] unhandled error while starting {uid }: {_e }")
+    else :
+        logger .info (f"[activation] finished for {uid }; active={uid in ACTIVE_BOTS }")
+
+async def _start_bot_instance_now_impl (session_string ,phone ,uid ,font ,_retry_count =0 ):
     if not data_manager .data .get ("global_bot_status",True ):
         return 
 
