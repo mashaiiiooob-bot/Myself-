@@ -945,11 +945,16 @@ class ResilientClient (Client ):
             return []
         return None 
 
-API_ID = 0
-API_HASH = ""
-BOT_TOKEN = ""
-PREMIUM_BOT_TOKEN = ""
-ROOT_ADMIN = 0
+API_ID = int(os.environ.get("API_ID", "0") or 0)
+API_HASH = os.environ.get("API_HASH", "")
+BOT_TOKEN = os.environ.get("BOT_TOKEN", "")
+PREMIUM_BOT_TOKEN = os.environ.get("PREMIUM_BOT_TOKEN", "")
+ROOT_ADMIN = int(os.environ.get("ROOT_ADMIN", "0") or 0)
+
+_missing_env = [k for k, v in (("API_ID", API_ID), ("API_HASH", API_HASH), ("BOT_TOKEN", BOT_TOKEN)) if not v]
+if _missing_env:
+    logger.error("[سیستم] متغیرهای محیطی تنظیم نشده‌اند: %s (آنها را در Railway > Variables اضافه کنید)", ", ".join(_missing_env))
+    raise SystemExit(1)
 
 DATA_FILE ="bot_data.json"
 TEHRAN_TIMEZONE =ZoneInfo ("Asia/Tehran")
@@ -16635,6 +16640,7 @@ async def _master_sharded_main ():
         f"سشن‌ها بین ورکرها با uid % {_SHARD_CURRENT_N } پخش شده‌اند."
         ))
     except Exception :
+        logger .exception ("manager_bot.start() failed")
         return 
 
     mem_task =asyncio .create_task (memory_cleaner ())
@@ -16679,6 +16685,7 @@ async def _legacy_main ():
         BOT_USERNAME =me .username 
         asyncio .create_task (notify_admins ("ربات مدیریت با موفقیت استارت شد."))
     except Exception :
+        logger .exception ("manager_bot.start() failed")
         return 
 
     mem_task =asyncio .create_task (memory_cleaner ())
