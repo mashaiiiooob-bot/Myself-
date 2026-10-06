@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>VOLDYSELF</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<style>
+:root{--bg:#070a1a;--tx:#f3f5ff;--hint:#9aa3cc;--glass:rgba(255,255,255,.065);--bd:rgba(255,255,255,.11);--a1:#38e1ff;--a2:#8b6cff;--a3:#ff5fa2;--nav:rgba(18,22,48,.78)}
+:root[data-theme=light]{--bg:#f2f4fd;--tx:#151a3a;--hint:#6b739c;--glass:rgba(255,255,255,.75);--bd:rgba(30,40,100,.1);--nav:rgba(255,255,255,.85)}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html{background:var(--bg)}
+body{margin:0;color:var(--tx);font-family:Vazirmatn,"Segoe UI",Tahoma,system-ui,sans-serif;padding:0 0 110px;min-height:100vh;position:relative;overflow-x:hidden;
+background:radial-gradient(520px 420px at 105% -5%,#8b6cff55,transparent 70%),radial-gradient(480px 420px at -10% 28%,#38e1ff33,transparent 70%),radial-gradient(520px 480px at 100% 85%,#ff5fa233,transparent 70%),var(--bg)}
+.hero{padding:26px 20px 6px;position:relative}
+.logo{display:flex;align-items:center;gap:12px}
+.logo i{width:50px;height:50px;border-radius:16px;display:grid;place-items:center;font-style:normal;font-size:26px;background:linear-gradient(135deg,var(--a1),var(--a2) 55%,var(--a3));box-shadow:0 8px 28px #8b6cff66}
+.logo h1{margin:0;font-size:23px;letter-spacing:4px;direction:ltr;font-weight:800;background:linear-gradient(90deg,var(--a1),var(--a2),var(--a3),var(--a1));background-size:200% auto;-webkit-background-clip:text;background-clip:text;color:transparent;animation:flow 6s linear infinite}
+@keyframes flow{to{background-position:200% center}}
+.logo p{margin:2px 0 0;font-size:13px;color:var(--hint)}
+.pill{margin-right:auto;font-size:11px;padding:5px 11px;border-radius:20px;background:#22e6a01f;color:#22e6a0;border:1px solid #22e6a055;display:flex;align-items:center;gap:6px}
+.pill:before{content:"";width:7px;height:7px;border-radius:50%;background:#22e6a0;box-shadow:0 0 10px #22e6a0;animation:pulse 1.8s infinite}
+@keyframes pulse{50%{opacity:.35}}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:18px 0 6px}
+.stats div{background:var(--glass);border:1px solid var(--bd);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border-radius:16px;padding:12px 6px;text-align:center;font-size:11.5px;color:var(--hint)}
+.stats b{display:block;font-size:20px;color:var(--tx);margin-bottom:2px}
+.search{margin:12px 16px 4px;position:relative}
+.search input{width:100%;padding:14px 44px 14px 16px;border-radius:18px;border:1px solid var(--bd);background:var(--glass);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);color:var(--tx);font:inherit;font-size:15px;outline:none;transition:.2s}
+.search input:focus{border-color:var(--a2);box-shadow:0 0 0 4px #8b6cff2e}
+.search:after{content:"🔍";position:absolute;right:15px;top:50%;transform:translateY(-50%);font-size:16px;opacity:.7}
+.chips{display:flex;gap:8px;overflow-x:auto;padding:10px 16px;scrollbar-width:none}
+.chips::-webkit-scrollbar{display:none}
+.chip{flex:none;padding:8px 15px;border-radius:22px;background:var(--glass);border:1px solid var(--bd);color:var(--hint);font-size:13px;cursor:pointer;transition:.2s;display:flex;gap:6px;align-items:center}
+.chip.on{color:#fff;border-color:transparent;background:linear-gradient(135deg,var(--c),color-mix(in srgb,var(--c) 55%,#000));box-shadow:0 6px 18px color-mix(in srgb,var(--c) 45%,transparent)}
+.sec{padding:2px 16px}
+.sec h2{display:flex;align-items:center;gap:8px;font-size:14px;margin:16px 4px 10px;color:var(--c);font-weight:700}
+.sec h2:after{content:"";flex:1;height:1px;background:linear-gradient(90deg,color-mix(in srgb,var(--c) 40%,transparent),transparent)}
+.cmd{display:flex;align-items:center;gap:10px;background:var(--glass);border:1px solid var(--bd);border-right:3px solid var(--c,var(--a2));backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border-radius:15px;padding:12px 13px;margin-bottom:9px;cursor:pointer;transition:.18s;animation:up .35s both}
+@keyframes up{from{opacity:0;transform:translateY(10px)}}
+.cmd:active{transform:scale(.975);background:color-mix(in srgb,var(--c) 14%,var(--glass))}
+.cmd code{color:var(--c);font-weight:700;font-size:14px;background:color-mix(in srgb,var(--c) 15%,transparent);padding:4px 10px;border-radius:9px;white-space:nowrap;font-family:inherit}
+.cmd span{font-size:12.5px;color:var(--hint);flex:1;text-align:left;line-height:1.6}
+.cmd:after{content:"⧉";font-size:15px;color:var(--hint);opacity:.6}
+.card{background:var(--glass);border:1px solid var(--bd);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border-radius:20px;padding:16px;margin:10px 16px}
+.card h3{margin:0 0 6px;font-size:16px}.card p{margin:4px 0;font-size:13px;color:var(--hint);line-height:1.9}
+.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;padding:6px 16px}
+.tile{background:var(--glass);border:1px solid var(--bd);border-radius:18px;padding:16px 6px 12px;text-align:center;font-size:12.5px;cursor:pointer;transition:.18s;position:relative;overflow:hidden}
+.tile:before{content:"";position:absolute;inset:0;background:radial-gradient(90px 70px at 50% 0,color-mix(in srgb,var(--c) 38%,transparent),transparent);opacity:.8}
+.tile:active{transform:scale(.94)}.tile b{display:block;font-size:28px;margin-bottom:6px;position:relative}.tile span{position:relative}
+.sw{display:flex;justify-content:space-between;align-items:center;padding:13px 2px;border-bottom:1px solid var(--bd);font-size:14px}
+.sw:last-of-type{border:0}
+.tog{width:48px;height:28px;border-radius:14px;background:#5a6090;position:relative;cursor:pointer;flex:none;transition:.25s}
+.tog:after{content:"";position:absolute;top:3px;right:3px;width:22px;height:22px;border-radius:50%;background:#fff;transition:.25s;box-shadow:0 2px 6px #0005}
+.tog.on{background:linear-gradient(135deg,var(--a1),var(--a2));box-shadow:0 0 16px #38e1ff55}.tog.on:after{right:23px}
+nav{position:fixed;bottom:calc(14px + env(safe-area-inset-bottom,0px));left:50%;transform:translateX(-50%);width:min(92%,420px);display:flex;background:var(--nav);border:1px solid var(--bd);backdrop-filter:blur(22px);-webkit-backdrop-filter:blur(22px);padding:7px;border-radius:28px;box-shadow:0 14px 40px #0006;z-index:9}
+nav button{flex:1;border:0;background:none;color:var(--hint);font:inherit;font-size:11.5px;padding:8px 0;border-radius:22px;cursor:pointer;transition:.25s}
+nav button i{display:block;font-style:normal;font-size:20px;transition:.25s}
+nav button.on{color:#fff;background:linear-gradient(135deg,var(--a2),var(--a3));box-shadow:0 6px 18px #8b6cff66}
+nav button.on i{transform:translateY(-1px) scale(1.12)}
+#toast{position:fixed;bottom:104px;left:50%;transform:translateX(-50%) translateY(20px);background:linear-gradient(135deg,#1c2250,#2a1f5c);border:1px solid var(--bd);color:#fff;padding:11px 20px;border-radius:22px;font-size:13px;opacity:0;transition:.3s;pointer-events:none;z-index:10;white-space:nowrap;max-width:90%;overflow:hidden;text-overflow:ellipsis}
+#toast.show{opacity:1;transform:translateX(-50%)}
+.hide{display:none}
+</style>
+</head>
+<body>
+<header class="hero"><div class="logo"><i>⚡</i><div><h1>VOLDYSELF</h1><p id="hi">دستیار هوشمند تلگرام شما</p></div><div class="pill">آنلاین</div></div>
+<div class="stats"><div><b id="n1">۰</b>دستور</div><div><b>۷</b>دسته‌بندی</div><div><b>۲۴/۷</b>فعال</div></div></header>
+
+<main id="p-cmd">
+  <div class="search"><input id="q" placeholder="جستجوی دستور... (مثلاً ساعت، بکاپ، ترجمه)"></div>
+  <div class="chips" id="chips"></div>
+  <div id="list"></div>
+</main>
+
+<main id="p-meow" class="hide">
+  <div class="card"><h3>🐱 بازی میو</h3><p>در گروه‌هایی که بازی روشن است، این عبارت‌ها را بنویسید. روی هر مورد بزنید تا کپی شود.</p></div>
+  <div class="sec" id="meow"></div>
+</main>
+
+<main id="p-panel" class="hide">
+  <div class="card"><h3>⚡ پنل سریع</h3><p>روی هر دکمه بزنید تا دستور آماده‌ی ارسال کپی شود، یا «ارسال به ربات» را بزنید.</p></div>
+  <div class="grid" id="quick"></div>
+  <div class="card"><h3>تنظیمات</h3><div id="sw"></div>
+  <p>با تغییر هر کلید، دستور مربوطه کپی می‌شود تا در چت بفرستید.</p></div>
+</main>
+
+<main id="p-about" class="hide">
+  <div class="card"><h3>درباره سلف</h3><p>سلف یک دستیار روی حساب خودتان است: ابزارهای گروه، ترجمه، جستجو، هوش مصنوعی، آمار چت، بازی میو و ده‌ها قابلیت دیگر.</p><p>برای فعال‌سازی یا پشتیبانی به ربات مدیریت مراجعه کنید.</p></div>
+  <div class="card"><h3>🔒 نکته امنیتی</h3><p>هیچ‌وقت سشن، توکن یا کد ورود را برای کسی نفرستید.</p></div>
+</main>
+
+<nav>
+  <button class="on" data-t="cmd"><i>📖</i>دستورات</button>
+  <button data-t="meow"><i>🐱</i>میو</button>
+  <button data-t="panel"><i>⚡</i>پنل</button>
+  <button data-t="about"><i>ℹ️</i>درباره</button>
+</nav>
+<div id="toast"></div>
+
+<script>
+const tg=window.Telegram&&Telegram.WebApp;
+if(tg){tg.ready();tg.expand();const u=tg.initDataUnsafe&&tg.initDataUnsafe.user;if(u)document.getElementById('hi').textContent='سلام '+u.first_name+' 👋'}
+const D={
+"عمومی":[["پنل","باز کردن پنل کنترل"],["راهنما","نمایش مرکز راهنما"],["ping","تست سرعت پاسخ"],["ساعت","ساعت تهران و تاریخ کامل"],["تاریخ","شمسی · میلادی · قمری"],["سلف خاموش","غیرفعال‌سازی سلف"],["سلف روشن","فعال‌سازی مجدد"],["آیدی","مشخصات کاربر"],["بکاپ","فایل HTML از ۲۰۰۰ پیام آخر"],["بکاپ کل","۱۰ چت خصوصی اخیر"],["آمار","کارت آمار چت (فعال‌ترین‌ها، ساعت‌ها، کلمات)"]],
+"گروه":[["تگ","تگ اعضای دارای یوزرنیم"],["تگ ادمین ها","تگ مدیران گروه"],["حذف [عدد]","حذف پیام‌های اخیر"],["بن","بن کاربر (ریپلای)"],["سکوت [زمان]","سکوت موقت (ریپلای)"],["اکشن","پنل اکشن سریع (ریپلای)"],["ترک گروه","حذف پیام‌های خودت و خروج"],["حذف پیام های امروز","حذف پیام‌های امروز خودت"],["حذف پیام های هفته","حذف پیام‌های ۷ روز اخیر خودت"],["کامنت","فعال‌سازی در گروه دیسکاشن"]],
+"ابزار":[["ترجمه","ترجمه پیام ریپلای‌شده"],["عکس [متن]","جستجو و ارسال تصویر"],["سرچ [موضوع]","جستجو و خلاصه متنی"],["هوش [سوال]","پرسیدن از هوش مصنوعی"],["هوش پاک","پاک کردن حافظه گفتگو"],["استیکر","ساخت استیکر"],["گیف","تبدیل ویدیو به گیف"],["دانلود","دانلود مدیا به ذخیره‌شده‌ها"],["ذخیره","ذخیره متن یا مدیا"],["لوگو [اسم] [شماره]","ساخت لوگو"],["رمز [متن]","رمزنگاری متن"],["رمزگشایی","ریپلای روی متن رمزشده"],["نرخ","تابلو زنده دلار، طلا، سکه، تتر"],["دلار 1.6","قیمت ۱.۶ دلار به تومان"],["طلا 1.5","قیمت ۱.۵ گرم طلای ۱۸"]],
+"سرگرمی":[["قلب","لودینگ قلبی ۰ تا ۱۰۰"],["ماتریکس","افکت بارش کد"],["لاو","قلب‌های رنگی متوالی"],["تاس [1-6]","تاس تا رسیدن به عدد"],["ریاکت [ایموجی]","ری‌اکشن خودکار"],["لیست ریاکت","نمایش لیست ریاکت"]],
+"زمان‌دار":[["پاک شونده [زمان]","حذف پیام پس از زمان"],["ارسال [زمان] بعد [متن]","ارسال زمان‌دار"],["تکرار [زمان]","تکرار پیام در چت (ریپلای)"],["تکرار خاموش","توقف تکرار"],["تنظیم منشی [متن]","پاسخ خودکار ثابت"]],
+"پروفایل":[["تنظیم عکس","با ریپلای"],["حذف عکس پروفایل","آخرین عکس"],["کپی روشن","کپی پروفایل ریپلای‌شده"],["کپی خاموش","بازگردانی پروفایل"],["تنظیم ایموجی ❤️","ایموجی پرمیوم (ریپلای)"],["لیست ایموجی","نمایش لیست ایموجی"]],
+"تبچی":[["وضعیت تبچی","وضعیت بنر، تایمر و ارسال‌ها"],["تنظیم بنر [متن]","تنظیم بنر"],["حذف بنر","پاک کردن بنر"],["تنظیم تایمر [زمان]","فاصله ارسال (۱۰ تا ۱۵۰۰ ثانیه)"],["بنر پیوی کل","ارسال همگانی به پیوی‌ها"]]
+};
+const MEOW=[["میو روشن","روشن کردن بازی در این چت (فقط مالک)"],["میو خاموش","خاموش کردن بازی"],["میو","دریافت میو پوینت (هر ۳:۳۰)"],["ماهی","ماهی‌گیری و ذخیره در یخچال"],["یخچال میویی","نمایش یخچال و ماهی‌ها"],["بفروش ماهی","فروش ماهی‌های یخچال"],["ارتقا یخچال","ارتقای ظرفیت یخچال"],["میو پوینت","موجودی شما"],["برترین میو","لیدربرد چت"]];
+const QUICK=[["⏰","ساعت"],["📊","آمار"],["🏓","ping"],["💾","بکاپ"],["💵","نرخ"],["📋","پنل"]];
+const SW=[["منشی خودکار","تنظیم منشی"],["ساعت در نام","ساعت"],["ضد ریپورت","پنل"],["تگ‌آلرت","پنل"]];
+const META={"همه":["✨","#8b6cff"],"عمومی":["🧭","#7c9cff"],"گروه":["👥","#ff7a9c"],"ابزار":["🛠","#34d9b3"],"سرگرمی":["🎮","#ffc857"],"زمان‌دار":["⏱","#b78bff"],"پروفایل":["🪪","#5ec8ff"],"تبچی":["📣","#ff9a62"]};
+const MC="#ff8fd0";
+let cat="همه",term="";
+const $=s=>document.querySelector(s);
+function toast(t){const e=$('#toast');e.textContent=t;e.classList.add('show');setTimeout(()=>e.classList.remove('show'),1400)}
+async function copy(t){try{await navigator.clipboard.writeText(t)}catch(e){const a=document.createElement('textarea');a.value=t;document.body.appendChild(a);a.select();document.execCommand('copy');a.remove()}
+ tg&&tg.HapticFeedback&&tg.HapticFeedback.impactOccurred('light');toast('کپی شد: '+t)}
+function row(c,d,col,i){return `<div class="cmd" style="--c:${col};animation-delay:${Math.min(i||0,12)*30}ms" data-c="${c.replace(/"/g,'&quot;')}"><code>${c}</code><span>${d}</span></div>`}
+function render(){const cs=['همه',...Object.keys(D)];
+ $('#chips').innerHTML=cs.map(c=>`<div class="chip ${c==cat?'on':''}" style="--c:${META[c][1]}" data-k="${c}">${META[c][0]} ${c}</div>`).join('');
+ let h='';for(const k in D){if(cat!='همه'&&cat!=k)continue;
+  const r=D[k].filter(x=>!term||(x[0]+x[1]).toLowerCase().includes(term));
+  if(r.length)h+=`<div class="sec" style="--c:${META[k][1]}"><h2>${META[k][0]} ${k}</h2>${r.map((x,i)=>row(x[0],x[1],META[k][1],i)).join('')}</div>`}
+ $('#list').innerHTML=h||'<div class="card"><p>چیزی پیدا نشد 🙈</p></div>'}
+$('#q').oninput=e=>{term=e.target.value.trim().toLowerCase();render()};
+$('#chips').onclick=e=>{const k=e.target.dataset.k;if(k){cat=k;render()}};
+document.body.onclick=e=>{const c=e.target.closest('.cmd');if(c)copy(c.dataset.c)};
+$('#meow').innerHTML=MEOW.map((x,i)=>row(x[0],x[1],MC,i)).join('');
+$('#quick').innerHTML=QUICK.map((x,i)=>`<div class="tile" style="--c:${["#38e1ff","#8b6cff","#22e6a0","#ffc857","#ff9a62","#ff5fa2"][i]}" data-q="${x[1]}"><b>${x[0]}</b><span>${x[1]}</span></div>`).join('');
+$('#quick').onclick=e=>{const t=e.target.closest('.tile');if(!t)return;copy(t.dataset.q);if(tg&&tg.initData)tg.sendData(JSON.stringify({cmd:t.dataset.q}))};
+$('#sw').innerHTML=SW.map((x,i)=>`<div class="sw"><span>${x[0]}</span><div class="tog" data-i="${i}"></div></div>`).join('');
+$('#sw').onclick=e=>{const t=e.target.closest('.tog');if(!t)return;t.classList.toggle('on');copy(SW[t.dataset.i][1]+(t.classList.contains('on')?' روشن':' خاموش'))};
+document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>{document.querySelectorAll('nav button').forEach(x=>x.classList.toggle('on',x==b));
+ ['cmd','meow','panel','about'].forEach(t=>$('#p-'+t).classList.toggle('hide',t!=b.dataset.t));window.scrollTo(0,0)});
+render();$('#n1').textContent=Object.values(D).reduce((a,b)=>a+b.length,0).toString().replace(/\d/g,d=>'۰۱۲۳۴۵۶۷۸۹'[d]);
+if(tg&&tg.colorScheme==='light')document.documentElement.dataset.theme='light';
+</script>
+</body>
+</html>
