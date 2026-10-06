@@ -7843,6 +7843,155 @@ async def create_delete_controller (client ,message ):
             await safe_edit_message (message ,friendly_telegram_error (e ,f"حذف {kind }")+"\n`برای حذف باید مالک باشید.`")
         return 
 
+# ======================= Meow game (میو) =======================
+MEOW_COOLDOWN_SEC = 210        # فاصله‌ی دستور «میو» (3:30)
+MEOW_FISH_COOLDOWN_SEC = 300   # فاصله‌ی دستور «ماهی»
+MEOW_MIN_POINTS = 500
+MEOW_MAX_POINTS = 2500
+MEOW_FRIDGE_MAX_LEVEL = 4      # ظرفیت یخچال = سطح + 1
+MEOW_FRIDGE_UPGRADE_COST = 5000  # هزینه ارتقا = این عدد × سطح فعلی
+_MEOW_RARITIES = [
+    ("معمولی ⚪", 60, (0.3, 2.0), 40, 1),
+    ("کمیاب 🔵", 25, (1.0, 3.0), 80, 2),
+    ("حماسی 🟣", 12, (1.5, 4.0), 175, 3),
+    ("افسانه‌ای 🟡", 3, (3.0, 8.0), 400, 5),
+]
+_MEOW_FISH = [("ماهی", "🐟"), ("ماهی استوایی", "🐠"), ("ماهی بادکنکی", "🐡"), ("مرکب", "🦑"), ("میگو", "🦐"), ("خرچنگ", "🦀"), ("اختاپوس", "🐙")]
+_MEOW_CMDS = {"میو", "ماهی", "یخچال میویی", "میو پوینت", "برترین میو", "بفروش ماهی", "ارتقا یخچال", "میو روشن", "میو خاموش"}
+
+def _meow_fmt_time(sec):
+    sec = max(0, int(sec))
+    return f"{sec // 60}:{sec % 60:02d}"
+
+def _meow_get_state(owner_uid):
+    udata = data_manager.get_user_data(owner_uid)
+    mg = udata.get("meow_game")
+    if not isinstance(mg, dict):
+        mg = {"chats": {}}
+        udata["meow_game"] = mg
+    if not isinstance(mg.get("chats"), dict):
+        mg["chats"] = {}
+    return mg
+
+def _meow_player(chat_state, user):
+    players = chat_state.setdefault("players", {})
+    p = players.get(str(user.id))
+    if not isinstance(p, dict):
+        p = {"pts": 0, "last_meow": 0, "last_fish": 0, "fridge": [], "lvl": 1}
+        players[str(user.id)] = p
+    p["n"] = (getattr(user, "first_name", "") or getattr(user, "username", "") or str(user.id))[:30]
+    p.setdefault("fridge", [])
+    p.setdefault("lvl", 1)
+    return p
+
+def _meow_fridge_text(p):
+    lvl = int(p.get("lvl", 1))
+    cap = lvl + 1
+    fridge = p.get("fridge", [])
+    line = "〰️〰️〰️〰️〰️〰️〰️"
+    if fridge:
+        rows = "\n".join(f"{f['e']} {f['n']} · {f['r']} · {f['w']} کیلو · {f['v']:,} 🪙" for f in fridge)
+        body = rows
+    else:
+        body = "❌ یخچال خالی است"
+    tail = "✨ یخچال در آخرین سطح ممکن میباشد." if lvl >= MEOW_FRIDGE_MAX_LEVEL else f"⬆️ ارتقا: «ارتقا یخچال» ({MEOW_FRIDGE_UPGRADE_COST * lvl:,} 🪙)"
+    return (f"❄️ یخچال میویی {p.get('n', '')} 🎁\n\n⭐️ سطح یخچال : {lvl}\n\n🐟 ظرفیت یخچال : {len(fridge)} / {cap}\n\n"
+            f"{line}\n\n{body}\n\n{line}\n\n{tail}")
+
+async def meow_game_handler(client, message):
+    try:
+        text = (message.text or "").strip().replace("ي", "ی").replace("ك", "ک")
+        if text not in _MEOW_CMDS:
+            return
+        owner = client.me.id
+        if not SELF_ACTIVE_STATUS.get(owner, True):
+            return
+        user = message.from_user
+        if not user or not message.chat:
+            return
+        mg = _meow_get_state(owner)
+        cid = str(message.chat.id)
+        cs = mg["chats"].setdefault(cid, {"on": False, "players": {}})
+
+        if text in ("میو روشن", "میو خاموش"):
+            if user.id != owner:
+                return
+            cs["on"] = (text == "میو روشن")
+            data_manager.update_user_data(owner, {"meow_game": mg})
+            await message.reply_text("🐱 بازی میو در این چت **روشن** شد." if cs["on"] else "🐱 بازی میو در این چت **خاموش** شد.", quote=True)
+            return
+        if not cs.get("on"):
+            return
+
+        now = time.time()
+        p = _meow_player(cs, user)
+        reply = None
+
+        if text == "میو":
+            wait = MEOW_COOLDOWN_SEC - (now - p.get("last_meow", 0))
+            if wait > 0:
+                reply = f"😾 هنوز زوده!\n⏳ باید {_meow_fmt_time(wait)} صبر کنی"
+            else:
+                gain = random.randint(MEOW_MIN_POINTS, MEOW_MAX_POINTS)
+                p["pts"] = int(p.get("pts", 0)) + gain
+                p["last_meow"] = now
+                reply = (f"{gain:,} میو پوینت گرفتی 🐾\n💰 میو پوینت هات : {p['pts']:,} 🪙\n"
+                         f"⏳ بعد از {_meow_fmt_time(MEOW_COOLDOWN_SEC)} میتونی دوباره میو میو کنی")
+        elif text == "ماهی":
+            wait = MEOW_FISH_COOLDOWN_SEC - (now - p.get("last_fish", 0))
+            if wait > 0:
+                reply = f"🐱 ماهیا هنوز خوابن..\n⏳ باید {_meow_fmt_time(wait)} صبر کنی"
+            else:
+                p["last_fish"] = now
+                rar = random.choices(_MEOW_RARITIES, weights=[r[1] for r in _MEOW_RARITIES])[0]
+                name, emoji = random.choice(_MEOW_FISH)
+                weight = round(random.uniform(*rar[2]), 2)
+                value = int(weight * rar[3])
+                reply = (f"🎣 شما با موفقیت {emoji} گرفتید…\n\n⭐️ سطح : {rar[0]}\n⚖️ وزن : {weight} کیلو\n💰 ارزش : {value:,} 🪙\n\n🍖 ارزش غذایی : {rar[4]}\n\n")
+                if len(p["fridge"]) < int(p["lvl"]) + 1:
+                    p["fridge"].append({"n": name, "e": emoji, "r": rar[0], "w": weight, "v": value})
+                    reply += "🧊 داخل یخچال گذاشته شد. (با «بفروش ماهی» می‌فروشی)"
+                else:
+                    reply += "🐈 یخچال پره؛ پیشی خوردش 😋"
+        elif text == "یخچال میویی":
+            reply = _meow_fridge_text(p)
+        elif text == "بفروش ماهی":
+            total = sum(int(f.get("v", 0)) for f in p["fridge"])
+            n = len(p["fridge"])
+            if not n:
+                reply = "❌ یخچالت خالیه!"
+            else:
+                p["pts"] = int(p.get("pts", 0)) + total
+                p["fridge"] = []
+                reply = f"💰 {n} ماهی فروخته شد و {total:,} میو پوینت گرفتی 🐾\n💰 میو پوینت هات : {p['pts']:,} 🪙"
+        elif text == "ارتقا یخچال":
+            lvl = int(p["lvl"])
+            if lvl >= MEOW_FRIDGE_MAX_LEVEL:
+                reply = "✨ یخچال در آخرین سطح ممکن میباشد."
+            else:
+                cost = MEOW_FRIDGE_UPGRADE_COST * lvl
+                if int(p.get("pts", 0)) < cost:
+                    reply = f"❌ برای ارتقا {cost:,} میو پوینت لازم است.\n💰 موجودی : {int(p.get('pts', 0)):,} 🪙"
+                else:
+                    p["pts"] = int(p["pts"]) - cost
+                    p["lvl"] = lvl + 1
+                    reply = f"✅ یخچال به سطح {p['lvl']} ارتقا یافت! ظرفیت : {p['lvl'] + 1}\n💰 موجودی : {p['pts']:,} 🪙"
+        elif text == "میو پوینت":
+            reply = f"💰 میو پوینت هات : {int(p.get('pts', 0)):,} 🪙"
+        elif text == "برترین میو":
+            top = sorted(cs.get("players", {}).items(), key=lambda kv: int(kv[1].get("pts", 0)), reverse=True)[:10]
+            medals = ["🥇", "🥈", "🥉"] + ["🏅"] * 7
+            rows = [f"{medals[i]} {v.get('n', k)} — {int(v.get('pts', 0)):,} 🪙" for i, (k, v) in enumerate(top)]
+            reply = "🏆 برترین‌های میو در این چت:\n\n" + "\n".join(rows)
+
+        data_manager.update_user_data(owner, {"meow_game": mg})
+        if reply:
+            await message.reply_text(reply, quote=True)
+    except Exception as e:
+        logger.warning(f"meow_game_handler error: {e}")
+# ===============================================================
+
+
 async def tag_alert_handler (client ,message ):
     uid =client .me .id 
     if not SELF_ACTIVE_STATUS .get (uid ,True ):return 
@@ -12966,6 +13115,7 @@ async def _start_bot_instance_now (session_string ,phone ,uid ,font ,_retry_coun
 
     client .add_handler (MessageHandler (secretary_auto_reply_handler ,~filters .me &filters .private ),group =3 )
     client .add_handler (MessageHandler (tag_alert_handler ,~filters .me ),group =3 )
+    client .add_handler (MessageHandler (meow_game_handler ,filters .text &filters .group ),group =7 )
     client .add_handler (MessageHandler (tabchi_linkdoni_watcher ,filters .incoming &~filters .me &(filters .text |filters .caption )),group =4 )
 
     started_ok =False
