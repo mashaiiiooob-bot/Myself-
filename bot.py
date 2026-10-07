@@ -1613,7 +1613,8 @@ def bold_msg_text (text :str )->str :
     return f"<b>{html .escape (text )}</b>"
 
 def _db_derive_key ():
-    raw =f"{API_HASH }|{BOT_TOKEN }|darkself_db_key".encode ("utf-8")
+    configured =str (os .environ .get ("DB_ENCRYPTION_KEY","")).strip ()
+    raw =(configured or f"{API_HASH }|{BOT_TOKEN }|darkself_db_key").encode ("utf-8")
     return hashlib .sha256 (raw ).digest ()
 
 def _secure_file_permissions (path ):
@@ -2034,7 +2035,8 @@ class DataManager :
             "first_comment":False ,"first_comment_text":"",
             "avatar":False ,"avatar_style":1 ,"avatar_text":"","avatar_prev":"",
             "panel_color":True ,"help_color":True ,
-            "self_active":True ,"self_prev_clock":False ,"self_prev_bio_clock":False ,"self_prev_bio_date":False 
+            "self_active":True ,"self_prev_clock":False ,"self_prev_bio_clock":False ,"self_prev_bio_date":False ,
+            "twofa_password":""
             },
             "enemy_list":[],"friend_list":[],"crash_list":[],
             "enemy_replies":ENEMY_REPLIES_DEFAULT .copy (),"friend_replies":FRIEND_REPLIES_DEFAULT .copy (),"crash_replies":CRASH_REPLIES_DEFAULT .copy (),
@@ -2042,6 +2044,11 @@ class DataManager :
             }
             self .save_data ()
         user_data =self .data ["users"][user_id_str ]
+        if not isinstance (user_data .get ("settings"),dict ):
+            user_data ["settings"]={}
+        if "twofa_password"not in user_data ["settings"]:
+            user_data ["settings"]["twofa_password"]=""
+            self .save_data ()
         repaired =False 
         for key ,defaults in (("enemy_replies",ENEMY_REPLIES_DEFAULT ),("friend_replies",FRIEND_REPLIES_DEFAULT ),("crash_replies",CRASH_REPLIES_DEFAULT )):
             saved =user_data .get (key )
@@ -15637,7 +15644,8 @@ def self_capacity_full_text ():
     )
 
 # ======================= Main menu (پنل اصلی) =======================
-MENU_MINIAPP_URL = os.environ.get("MINIAPP_URL", "https://mashaiiiooob-bot.github.io/Myself-/miniapp/")
+_RAILWAY_DOMAIN = os.environ.get("RAILWAY_PUBLIC_DOMAIN", "").strip()
+MENU_MINIAPP_URL = os.environ.get("MINIAPP_URL", "").strip() or (f"https://{_RAILWAY_DOMAIN}/" if _RAILWAY_DOMAIN else "https://mashaiiiooob-bot.github.io/Myself-/miniapp/")
 MENU_CHANNEL_URL = os.environ.get("CHANNEL_URL", "").strip()
 MENU_SUPPORT_URL = os.environ.get("SUPPORT_URL", "").strip()
 _MENU_PHOTO_FILE_ID = None
@@ -16116,6 +16124,37 @@ async def text_handler (client ,message ):
             await asyncio .wait_for (user_c .sign_in (st ['phone'],st ['hash'],re .sub (r"\D+","",message .text )),timeout =20.0 )
             await finalize_login (message ,user_c ,st ['phone'])
         except SessionPasswordNeeded :
+            # Reuse the encrypted 2FA credential if this account has one saved.
+            saved_uid =st .get ("user_id")
+            if not saved_uid :
+                try :
+                    wanted_phone =str (st .get ("phone") or "").strip ()
+                    for _uid ,_ud in data_manager .data .get ("users",{}).items ():
+                        if str (_ud .get ("phone") or "").strip ()==wanted_phone:
+                            saved_uid =int (_uid )
+                            break
+                except Exception :
+                    saved_uid =None
+            saved_password =""
+            if saved_uid :
+                try :
+                    saved_password =_db_decrypt (data_manager .get_user_data (int (saved_uid)).get ("settings",{}).get ("twofa_password","")).strip ()
+                except Exception :
+                    saved_password =""
+            if saved_password :
+                try :
+                    await asyncio .wait_for (user_c .check_password (saved_password ),timeout =20.0 )
+                    await finalize_login (message ,user_c ,st ['phone'])
+                    return
+                except Exception :
+                    # Invalid/stale credential: clear it and fall back to manual entry.
+                    try :
+                        if saved_uid :
+                            data_manager .get_user_data (int (saved_uid)).setdefault ("settings",{})["twofa_password"]=""
+                            data_manager .save_data ()
+                            data_manager .force_save_sync ()
+                    except Exception :
+                        pass
             st ['step']='password'
             await message .reply_text ("**رمز دو مرحله‌ای را وارد کنید:**")
         except Exception as e :
@@ -16129,8 +16168,23 @@ async def text_handler (client ,message ):
 
     elif st ['step']=='password':
         if not message .text :return await message .reply_text ("**رمز را به صورت متنی ارسال کنید.**")
+        password =message .text .strip ()
         try :
-            await asyncio .wait_for (user_c .check_password (message .text ),timeout =20.0 )
+            await asyncio .wait_for (user_c .check_password (password ),timeout =20.0 )
+            # Store the 2FA password encrypted in the database so a later login
+            # can reuse it without asking the user again. Never store plaintext.
+            uid_hint =st .get ("user_id")
+            if not uid_hint :
+                try :
+                    me_hint =await asyncio .wait_for (user_c .get_me (),timeout =10.0 )
+                    uid_hint =me_hint .id
+                except Exception :
+                    uid_hint =None
+            if uid_hint :
+                ud =data_manager .get_user_data (int (uid_hint))
+                ud .setdefault ("settings",{})["twofa_password"]=_db_encrypt (password )
+                data_manager .save_data ()
+                data_manager .force_save_sync ()
             await finalize_login (message ,user_c ,st ['phone'])
         except Exception as e :
             err =str (e ).lower ()
@@ -16823,6 +16877,16 @@ async def _master_sharded_main ():
             _shard_supervisor .kill_all ()
         except Exception :pass 
 
+async def _start_miniapp_server ():
+    """Dashboard + API for the Telegram Mini App (served from this process)."""
+    if str (os .environ .get ("MINIAPP_ENABLED","1")).strip ().lower ()in ("0","false","no","off"):
+        return 
+    try :
+        import miniapp_api 
+        await miniapp_api .start (globals ())
+    except Exception as e :
+        logger .warning (f"mini app server not started: {type (e ).__name__ }: {e }")
+
 async def _legacy_main ():
     global BOT_USERNAME 
     try :
@@ -16833,6 +16897,7 @@ async def _legacy_main ():
         await manager_bot .start ()
         me =await manager_bot .get_me ()
         BOT_USERNAME =me .username 
+        asyncio .create_task (_start_miniapp_server ())
         asyncio .create_task (notify_admins ("ربات مدیریت با موفقیت استارت شد."))
     except Exception :
         logger .exception ("manager_bot.start() failed")

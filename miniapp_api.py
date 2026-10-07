@@ -256,6 +256,27 @@ def make_app(g):
 
 
 async def start(g):
-    runner = web.AppRunner(make_app(g))
+    app = make_app(g)
+    page_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'miniapp', 'dashboard', 'index.html')
+
+    async def page(req):
+        try:
+            with open(page_path, encoding='utf-8') as f:
+                html = f.read()
+        except OSError:
+            return web.Response(text='dashboard not found', status=404)
+        me = getattr(g.get('manager_bot'), 'me', None)
+        html = html.replace('__BOT__', getattr(me, 'username', '') or '').replace('__API__', os.environ.get('MINIAPP_PUBLIC_URL', '').rstrip('/'))
+        return web.Response(text=html, content_type='text/html', headers={'Cache-Control': 'no-store'})
+
+    async def health(req):
+        return web.json_response({'ok': True})
+
+    app.router.add_get('/', page)
+    app.router.add_get('/app', page)
+    app.router.add_get('/healthz', health)
+    runner = web.AppRunner(app)
     await runner.setup()
-    await web.TCPSite(runner, '0.0.0.0', int(os.environ.get('MINIAPP_PORT', '8080'))).start()
+    port = int(os.environ.get('MINIAPP_PORT') or os.environ.get('PORT') or 8080)
+    await web.TCPSite(runner, '0.0.0.0', port).start()
+    return runner
