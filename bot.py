@@ -15645,7 +15645,9 @@ def self_capacity_full_text ():
 
 # ======================= Main menu (پنل اصلی) =======================
 _RAILWAY_DOMAIN = os.environ.get("RAILWAY_PUBLIC_DOMAIN", "").strip()
-MENU_MINIAPP_URL = os.environ.get("MINIAPP_URL", "").strip() or (f"https://{_RAILWAY_DOMAIN}/" if _RAILWAY_DOMAIN else "https://mashaiiiooob-bot.github.io/Myself-/miniapp/")
+_MINIAPP_EXPLICIT = os.environ.get("MINIAPP_URL", "").strip()
+_MINIAPP_PUBLIC = _MINIAPP_EXPLICIT if (_MINIAPP_EXPLICIT.startswith("https://") and "github.io" not in _MINIAPP_EXPLICIT) else (f"https://{_RAILWAY_DOMAIN}/" if _RAILWAY_DOMAIN else "")
+MENU_MINIAPP_URL = _MINIAPP_PUBLIC or _MINIAPP_EXPLICIT or "https://mashaiiiooob-bot.github.io/Myself-/miniapp/"
 MENU_CHANNEL_URL = os.environ.get("CHANNEL_URL", "").strip()
 MENU_SUPPORT_URL = os.environ.get("SUPPORT_URL", "").strip()
 _MENU_PHOTO_FILE_ID = None
@@ -15706,6 +15708,12 @@ async def send_main_menu(chat_id):
                 if j.get("ok"):
                     try:
                         _MENU_PHOTO_FILE_ID = j["result"]["photo"][-1]["file_id"]
+                    except Exception:
+                        pass
+                    try:
+                        _pu = _miniapp_public_url()
+                        if _pu:
+                            asyncio.create_task(_set_menu_button(_pu, chat_id))
                     except Exception:
                         pass
                     return True
@@ -16886,10 +16894,23 @@ def _miniapp_public_url ():
     dom =str (os .environ .get ("RAILWAY_PUBLIC_DOMAIN","")).strip ()
     return f"https://{dom }/"if dom else ""
 
-async def _set_menu_button (url ):
+async def _get_menu_button (chat_id =None ):
+    try :
+        async with aiohttp .ClientSession ()as sess :
+            payload ={"chat_id":chat_id }if chat_id else {}
+            async with sess .post (f"https://api.telegram.org/bot{BOT_TOKEN }/getChatMenuButton",json =payload ,timeout =aiohttp .ClientTimeout (total =20 ))as r :
+                j =await r .json (content_type =None )
+        res =j .get ("result")or {}
+        return (res .get ("web_app")or {}).get ("url")or f"({res .get ('type','?')})"
+    except Exception as e :
+        return f"error: {type (e ).__name__ }"
+
+async def _set_menu_button (url ,chat_id =None ):
     try :
         async with aiohttp .ClientSession ()as sess :
             payload ={"menu_button":{"type":"web_app","text":"⚡ پنل سلف","web_app":{"url":url }}}
+            if chat_id :
+                payload ["chat_id"]=chat_id 
             async with sess .post (f"https://api.telegram.org/bot{BOT_TOKEN }/setChatMenuButton",json =payload ,timeout =aiohttp .ClientTimeout (total =20 ))as r :
                 j =await r .json (content_type =None )
         logger .info (f"[miniapp] menu button -> {url } : {'ok'if j .get ('ok')else j }")
@@ -16924,7 +16945,12 @@ async def miniapp_status_handler (client ,message ):
     f"سرور: {'🟢 روشن'if st ['running']else '🔴 خاموش'}\n"
     f"پورت: `{st ['port']or os .environ .get ('PORT','—')}`\n"
     f"آدرس عمومی: `{st ['url']or 'تنظیم نشده'}`\n"
-    f"خطا: `{st ['error']or '—'}`\n\n")
+    f"خطا: `{st ['error']or '—'}`\n"
+    f"دکمه‌ی منوی این چت: `{await _get_menu_button (message .chat .id )}`\n"
+    f"آدرس دکمه‌ی «🚀 مینی‌اپ» در منو: `{MENU_MINIAPP_URL }`\n\n")
+    _pu =_miniapp_public_url ()
+    if _pu :
+        await _set_menu_button (_pu ,message .chat .id )
     if not st ["url"]:
         txt +="برای فعال شدن، در Railway بخش Settings > Networking گزینه‌ی Generate Domain را بزنید و دوباره دیپلوی کنید."
     await message .reply_text (txt )
