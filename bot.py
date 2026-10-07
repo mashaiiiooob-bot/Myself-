@@ -15,6 +15,7 @@ import math
 import collections
 import html
 import base64
+import io
 import hashlib
 import hmac
 import secrets
@@ -45,7 +46,7 @@ try:
         uvloop.install()
     else:
         uvloop = None
-        logger.info("uvloop skipped on Windows (not supported)")
+        pass
 except Exception:
     uvloop = None
 
@@ -78,7 +79,7 @@ from pyrogram.enums import (
     ChatType, ChatAction, ChatMembersFilter, ChatMemberStatus, ParseMode, MessagesFilter
 )
 from pyrogram.types import (
-    Message, MessageEntity, ReplyKeyboardMarkup, KeyboardButton, ReplyKeyboardRemove,
+    Message, ReplyKeyboardMarkup, KeyboardButton, ReplyKeyboardRemove,
     InlineKeyboardMarkup, InlineKeyboardButton,
     InlineQueryResultArticle, InputTextMessageContent
 )
@@ -1612,10 +1613,7 @@ def bold_msg_text (text :str )->str :
     return f"<b>{html .escape (text )}</b>"
 
 def _db_derive_key ():
-    # Prefer a dedicated secret so database encryption is independent of the bot token.
-    # Set DB_ENCRYPTION_KEY in the server environment and never commit it to source control.
-    configured =str (os .environ .get ("DB_ENCRYPTION_KEY","")).strip ()
-    raw =(configured or f"{API_HASH }|{BOT_TOKEN }|darkself_db_key").encode ("utf-8")
+    raw =f"{API_HASH }|{BOT_TOKEN }|darkself_db_key".encode ("utf-8")
     return hashlib .sha256 (raw ).digest ()
 
 def _secure_file_permissions (path ):
@@ -2036,8 +2034,7 @@ class DataManager :
             "first_comment":False ,"first_comment_text":"",
             "avatar":False ,"avatar_style":1 ,"avatar_text":"","avatar_prev":"",
             "panel_color":True ,"help_color":True ,
-            "self_active":True ,"self_prev_clock":False ,"self_prev_bio_clock":False ,"self_prev_bio_date":False ,
-            "twofa_password":""
+            "self_active":True ,"self_prev_clock":False ,"self_prev_bio_clock":False ,"self_prev_bio_date":False 
             },
             "enemy_list":[],"friend_list":[],"crash_list":[],
             "enemy_replies":ENEMY_REPLIES_DEFAULT .copy (),"friend_replies":FRIEND_REPLIES_DEFAULT .copy (),"crash_replies":CRASH_REPLIES_DEFAULT .copy (),
@@ -2045,11 +2042,6 @@ class DataManager :
             }
             self .save_data ()
         user_data =self .data ["users"][user_id_str ]
-        if not isinstance (user_data .get ("settings"),dict ):
-            user_data ["settings"]={}
-        if "twofa_password" not in user_data ["settings"]:
-            user_data ["settings"]["twofa_password"]=""
-            self .save_data ()
         repaired =False 
         for key ,defaults in (("enemy_replies",ENEMY_REPLIES_DEFAULT ),("friend_replies",FRIEND_REPLIES_DEFAULT ),("crash_replies",CRASH_REPLIES_DEFAULT )):
             saved =user_data .get (key )
@@ -2522,1147 +2514,6 @@ STARTUP_BATCH_PAUSE =float (os .getenv ("DARKSELF_STARTUP_BATCH_PAUSE","0.03"))
 
 BIO_CLOCK_STATUS ,BIO_DATE_STATUS ,BIO_DATE_TYPE ,BIO_FONT_CHOICE ={},{},{},{}
 
-
-# ═══════════════════════════════════════════════════════════
-#  MEOWIE ULTIMATE — integrated capability
-#  Per-account switch: «میو» / «میو روشن» / «میو خاموش»
-# ═══════════════════════════════════════════════════════════
-MEOWIE_BOTS = {"meowieqbot", "meowieeqbot", "meowieqivbot"}
-MEOWIE_DELAY_MIN = 15
-MEOWIE_DELAY_MAX = 45
-MEOWIE_LOOP_DELAY = 90
-MEOWIE_CLICK_DELAY_MIN = 2
-MEOWIE_CLICK_DELAY_MAX = 6
-MEOWIE_STATUS = {}
-MEOWIE_TASKS = {}
-MEOWIE_RUNTIME = {}
-MEOWIE_LEARNED_FILE = "meowie_learned.json"
-MEOWIE_HISTORY_FILE = "meowie_history.json"
-
-LEARNED_FILE = MEOWIE_LEARNED_FILE
-HISTORY_FILE = MEOWIE_HISTORY_FILE
-
-class UltimateAnalyzer:
-    """تحلیل‌گر فوق پیشرفته همه چیز"""
-
-    def __init__(self):
-        self.patterns = self._build_patterns()
-        self.learned = self._load_learned()
-        self.context = {}  # حافظه contextual
-
-    def _build_patterns(self):
-        """همه الگوها — بخش ۱"""
-        return {
-            # ═══════════════════════════════════════════════════════════
-            #  دسته ۱: پول و اقتصاد
-            # ═══════════════════════════════════════════════════════════
-            "money": {
-                "gain": [
-                    r'\+?\s*(\d[\d,،٬]*)\s*(?:میو|meow|point|سکه|امتیاز|coin)',
-                    r'(?:دریافت|گرفت|برد|برنده|واریز|به دست)\s*(\d[\d,،٬]*)',
-                    r'(?:جایزه|reward|پاداش|bonus)[\s:]*(\d[\d,،٬]*)',
-                    r'💰\s*(\d[\d,،٬]*)',
-                    r'(\d[\d,،٬]*)\s*(?:میو|meow)\s*(?:گرفت|دریافت|برد)',
-                    r'(?:سود|interest|profit)[\s:]*(\d[\d,،٬]*)',
-                ],
-                "loss": [
-                    r'-\s*(\d[\d,،٬]*)\s*(?:میو|meow|point|سکه)',
-                    r'(?:باخت|از دست|کم شد|کسری|کسر)\s*(\d[\d,،٬]*)',
-                    r'(?:جریمه|fine|penalty)[\s:]*(\d[\d,،٬]*)',
-                ],
-                "balance": [
-                    r'(?:موجودی|balance|دارایی)[\s:]*(\d[\d,،٬]*)',
-                    r'(\d[\d,،٬]*)\s*(?:میو|meow|point)\s*(?:داری|دارید)',
-                    r'💼\s*(\d[\d,،٬]*)',
-                    r'💰[\s:]*(\d[\d,،٬]*)',
-                ],
-                "bank": [
-                    r'(?:بانک|bank)[\s:]*(\d[\d,،٬]*)',
-                    r'(?:سپرده|deposit)[\s:]*(\d[\d,،٬]*)',
-                    r'(?:برداشت|withdraw)[\s:]*(\d[\d,،٬]*)',
-                ],
-                "tax": [
-                    r'(?:مالیات|tax)[\s:]*(\d[\d,،٬]*)',
-                ],
-                "subsidy": [
-                    r'(?:یارانه|subsidy)[\s:]*(\d[\d,،٬]*)',
-                ],
-            },
-
-            # ═══════════════════════════════════════════════════════════
-            #  دسته ۲: سطح و تجربه
-            # ═══════════════════════════════════════════════════════════
-            "level": {
-                "level": [
-                    r'(?:سطح|level|لفل|لول)[\s:]*(\d+)',
-                    r'Level[\s:]*(\d+)',
-                    r'🏆\s*(\d+)',
-                    r'🎖\s*(\d+)',
-                ],
-                "xp": [
-                    r'(\d[\d,،٬]*)\s*(?:XP|xp|تجربه)',
-                    r'(?:تجربه|XP)[\s:]*(\d[\d,،٬]*)',
-                    r'✨\s*(\d[\d,،٬]*)',
-                ],
-                "level_up": [
-                    r'(?:ارتقا|level up|سطح بالا|لول آپ)',
-                    r'🎉.*(?:سطح|level)',
-                ],
-            },
-
-            # ═══════════════════════════════════════════════════════════
-            #  دسته ۳: کول‌داون
-            # ═══════════════════════════════════════════════════════════
-            "cooldown": {
-                "seconds": [r'(\d+)\s*ثانیه'],
-                "minutes": [r'(\d+)\s*دقیقه'],
-                "hours": [r'(\d+)\s*ساعت'],
-                "days": [r'(\d+)\s*روز'],
-                "generic": [
-                    r'(?:صبر|wait|cooldown|دوباره|بعد)',
-                    r'⏳', r'⏰',
-                    r'بعداً?\s*بیا',
-                ],
-            },
-
-            # ═══════════════════════════════════════════════════════════
-            #  دسته ۴: خطا
-            # ═══════════════════════════════════════════════════════════
-            "error": {
-                "no_money": [
-                    r'(?:پول|موجودی|سکه)\s*(?:نداری|کافی نیست|کم)',
-                    r'(?:insufficient|not enough)',
-                ],
-                "no_level": [
-                    r'(?:سطح|level)\s*(?:کم|پایین|کافی نیست)',
-                    r'(?:نیاز|require)\s*(?:به|to)\s*(?:سطح|level)',
-                ],
-                "not_found": [
-                    r'(?:پیدا نشد|not found|وجود ندارد)',
-                ],
-                "already": [
-                    r'(?:قبلا|already|از قبل)',
-                ],
-                "generic": [
-                    r'(?:خطا|error|❌)',
-                    r'(?:نمی|نمیشه|نمیتون)',
-                ],
-            },
-
-            # ═══════════════════════════════════════════════════════════
-            #  دسته ۵: ماهیگیری
-            # ═══════════════════════════════════════════════════════════
-            "fishing": {
-                "catch": [
-                    r'(?:ماهی|fish)\s*(?:گرفت|صید|caught)',
-                    r'(?:گرفت|صید)\s*(?:ماهی|fish)',
-                    r'🎣',
-                ],
-                "fish_size": [
-                    r'(\d[\d,.]*)\s*(?:کیلو|kg|گرم|g)',
-                ],
-                "fish_name": [
-                    r'(?:قزل|کپور|ماهی سفید|شیر|سالمون|تن|سفید|کوسه)',
-                ],
-                "cooldown": [
-                    r'(?:ماهیگیری|fishing)[\s\S]{0,50}(?:صبر|دوباره)',
-                ],
-            },
-
-            # ═══════════════════════════════════════════════════════════
-            #  دسته ۶: آشپزی
-            # ═══════════════════════════════════════════════════════════
-            "cooking": {
-                "cook": [r'(?:آشپزی|پخت|cook)'],
-                "food": [r'(?:غذا|food|meal)'],
-                "recipe": [r'(?:دستور|recipe)'],
-            },
-
-            # ═══════════════════════════════════════════════════════════
-            #  دسته ۷: کارخانه
-            # ═══════════════════════════════════════════════════════════
-            "factory": {
-                "start": [
-                    r'(?:شروع|start)\s*(?:تولید|production)',
-                    r'🏭',
-                ],
-                "ready": [
-                    r'(?:آماده|ready|تموم|کامل)',
-                ],
-                "collect": [
-                    r'(?:جمع|collect|برداشت)',
-                ],
-                "product": [
-                    r'(?:محصول|product|کالا)',
-                ],
-                "upgrade": [
-                    r'(?:ارتقا|upgrade)\s*(?:کارخانه|factory)',
-                ],
-            },
-
-            # ═══════════════════════════════════════════════════════════
-            #  دسته ۸: ماینر
-            # ═══════════════════════════════════════════════════════════
-            "miner": {
-                "token": [
-                    r'(\d[\d,.]*)\s*(?:توکن|token|coin)',
-                ],
-                "electricity": [
-                    r'(?:برق|electricity)[\s:]*(\d[\d,]*)',
-                ],
-                "upgrade": [
-                    r'(?:ارتقا|upgrade)\s*(?:ماینر|miner)',
-                ],
-                "level": [
-                    r'(?:ماینر|miner)[\s\S]{0,20}(?:سطح|level)[\s:]*(\d+)',
-                ],
-            },
-        # continue pattern categories
-            #  دسته ۹: گربه‌ها
-            # ═══════════════════════════════════════════════════════════
-            "cats": {
-                "street": [r'(?:گربه|cat)\s*(?:خیابانی|street)'],
-                "hero": [r'(?:گربه|cat)\s*(?:قهرمان|hero)'],
-                "new": [r'(?:گربه|cat)\s*(?:جدید|new)'],
-                "nft": [r'(?:گربه|cat)\s*(?:NFT|nft)'],
-                "adopt": [r'(?:اداپت|adopt|پذیرش)'],
-            },
-
-            # ═══════════════════════════════════════════════════════════
-            #  دسته ۱۰: هدایا
-            # ═══════════════════════════════════════════════════════════
-            "gifts": {
-                "received": [
-                    r'(?:هدیه|gift)\s*(?:گرفت|دریافت)',
-                    r'🎁',
-                ],
-                "sent": [r'(?:هدیه|gift)\s*(?:فرستاد|ارسال)'],
-                "collection": [r'(?:کالکشن|collection|مجموعه)'],
-                "vip": [r'(?:VIP|ویژه)'],
-                "open": [r'(?:باز کردن|open)'],
-            },
-
-            # ═══════════════════════════════════════════════════════════
-            #  دسته ۱۱: مأموریت
-            # ═══════════════════════════════════════════════════════════
-            "tasks": {
-                "complete": [
-                    r'(?:مأموریت|task|ماموریت)\s*(?:کامل|تمام|انجام)',
-                    r'✅',
-                ],
-                "reward": [r'(?:جایزه|reward)\s*(?:گرفت|دریافت)'],
-                "new": [r'(?:مأموریت|task)\s*(?:جدید|new)'],
-                "daily": [r'(?:روزانه|daily)'],
-                "weekly": [r'(?:هفتگی|weekly)'],
-            },
-
-            # ═══════════════════════════════════════════════════════════
-            #  دسته ۱۲: اجتماعی
-            # ═══════════════════════════════════════════════════════════
-            "social": {
-                "friend": [r'(?:دوست|friend)'],
-                "marriage": [r'(?:ازدواج|married|همسر)'],
-                "divorce": [r'(?:طلاق|divorce)'],
-                "children": [r'(?:بچه|child|فرزند)'],
-                "family": [r'(?:خانواده|family)'],
-                "proposal": [r'(?:خواستگاری|proposal)'],
-            },
-
-            # ═══════════════════════════════════════════════════════════
-            #  دسته ۱۳: شهر
-            # ═══════════════════════════════════════════════════════════
-            "city": {
-                "level": [
-                    r'(?:شهر|city)[\s\S]{0,20}(?:سطح|level)[\s:]*(\d+)',
-                ],
-                "mayor": [r'(?:شهردار|mayor)'],
-                "election": [r'(?:انتخابات|election)'],
-                "resources": [r'(?:منابع|resources)'],
-                "citizens": [r'(?:شهروند|citizen)'],
-                "upgrade": [r'(?:ارتقا|upgrade)\s*(?:شهر|city)'],
-            },
-
-            # ═══════════════════════════════════════════════════════════
-            #  دسته ۱۴: بازار
-            # ═══════════════════════════════════════════════════════════
-            "market": {
-                "buy": [r'(?:خرید|buy)'],
-                "sell": [r'(?:فروش|sell)'],
-                "price": [r'(?:قیمت|price)'],
-                "trade": [r'(?:معامله|trade)'],
-                "inventory": [r'(?:انبار|inventory)'],
-            },
-
-            # ═══════════════════════════════════════════════════════════
-            #  دسته ۱۵: NFT
-            # ═══════════════════════════════════════════════════════════
-            "nft": {
-                "new": [r'(?:NFT|nft)\s*(?:جدید|new)'],
-                "buy": [r'(?:خرید|buy)\s*(?:NFT|nft)'],
-                "sell": [r'(?:فروش|sell)\s*(?:NFT|nft)'],
-                "mint": [r'(?:mint|ضرب)'],
-                "transfer": [r'(?:انتقال|transfer)'],
-            },
-
-            # ═══════════════════════════════════════════════════════════
-            #  دسته ۱۶: موفقیت / ناموفق
-            # ═══════════════════════════════════════════════════════════
-            "success": {
-                "generic": [
-                    r'(?:موفق|success|انجام شد)',
-                    r'(?:تبریک|congrats|🎉)',
-                    r'(?:✅)',
-                ],
-                "transaction": [r'(?:تراکنش|transaction)\s*(?:موفق|success)'],
-            },
-            "failed": {
-                "generic": [
-                    r'(?:ناموفق|failed)',
-                    r'(?:نشد|نتونست)',
-                    r'(?:❌)',
-                ],
-                "transaction": [r'(?:تراکنش|transaction)\s*(?:ناموفق|failed)'],
-            },
-        }
-    def _load_learned(self):
-        """بارگذاری الگوهای یادگرفته"""
-        if os.path.exists(LEARNED_FILE):
-            try:
-                with open(LEARNED_FILE, "r", encoding="utf-8") as f:
-                    return json.load(f)
-            except:
-                pass
-        return {}
-
-    def _save_learned(self):
-        """ذخیره الگوهای یادگرفته"""
-        with open(LEARNED_FILE, "w", encoding="utf-8") as f:
-            json.dump(self.learned, f, ensure_ascii=False, indent=2)
-
-    def analyze(self, message: Message, chat_id: int = None) -> dict:
-        """تحلیل کامل و عمیق پیام"""
-        text = message.text or message.caption or ""
-        entities = message.entities or message.caption_entities or []
-
-        result = {
-            "text": text,
-            "raw_text": text,
-            "categories": [],
-            "data": {},
-            "buttons": [],
-            "entities": [],
-            "next_actions": [],
-            "confidence": 0,
-            "timestamp": time.time(),
-            "chat_id": chat_id or message.chat.id,
-            "message_id": message.id,
-        }
-
-        # ═══ ۱. تحلیل متن — همه الگوها ═══
-        for cat_name, cat_data in self.patterns.items():
-            if isinstance(cat_data, list):
-                # ساختار ساده
-                for pattern in cat_data:
-                    match = re.search(pattern, text, re.IGNORECASE)
-                    if match:
-                        result["categories"].append(cat_name)
-                        for g in match.groups():
-                            if g:
-                                try:
-                                    num = int(g.replace(",", "").replace("،", "").replace("٬", ""))
-                                    result["data"][cat_name] = num
-                                except:
-                                    pass
-                        break
-            else:
-                # ساختار تودرتو
-                for sub_name, patterns in cat_data.items():
-                    for pattern in patterns:
-                        match = re.search(pattern, text, re.IGNORECASE)
-                        if match:
-                            full_cat = f"{cat_name}.{sub_name}"
-                            result["categories"].append(full_cat)
-                            for g in match.groups():
-                                if g:
-                                    try:
-                                        num = int(g.replace(",", "").replace("،", "").replace("٬", ""))
-                                        result["data"][full_cat] = num
-                                    except:
-                                        pass
-                            break
-
-        # ═══ ۲. تحلیل دکمه‌ها ═══
-        if message.reply_markup:
-            if hasattr(message.reply_markup, "inline_keyboard"):
-                for row_idx, row in enumerate(message.reply_markup.inline_keyboard):
-                    for col_idx, btn in enumerate(row):
-                        result["buttons"].append({
-                            "text": btn.text,
-                            "callback_data": getattr(btn, "callback_data", None),
-                            "url": getattr(btn, "url", None),
-                            "row": row_idx,
-                            "col": col_idx,
-                        })
-
-        # ═══ ۳. تحلیل Entityها ═══
-        for ent in entities:
-            result["entities"].append({
-                "type": str(ent.type),
-                "offset": ent.offset,
-                "length": ent.length,
-                "url": getattr(ent, "url", None),
-            })
-
-        # ═══ ۴. تحلیل لینک‌های Mini App ═══
-        for ent in result["entities"]:
-            if ent["type"] == "MessageEntityType.TEXT_LINK" and ent.get("url"):
-                url = ent["url"]
-                if "web_app" in url or "mini" in url.lower():
-                    result["categories"].append("miniapp")
-
-        # ═══ ۵. تحلیل Context (حافظه) ═══
-        if chat_id:
-            prev = self.context.get(chat_id, [])
-            prev.append(result)
-            self.context[chat_id] = prev[-10:]
-
-        # ═══ ۶. تعیین Confidence ═══
-        if result["categories"]:
-            result["confidence"] = min(100, len(result["categories"]) * 25)
-
-        # ═══ ۷. تعیین دستور بعدی ═══
-        result["next_actions"] = self._get_next_actions(result["categories"])
-
-        # ═══ ۸. ذخیره در تاریخچه ═══
-        self._save_history(result)
-
-        return result
-
-    def _get_next_actions(self, categories: list) -> list:
-        """دستور بعدی بر اساس دسته"""
-        mapping = {
-            "money.gain": ["ماینر میویی", "کارخانه میویی"],
-            "money.loss": ["ماموریت های میویی"],
-            "fishing.catch": ["فروش ماهی", "آشپزی میویی", "ماهیگیری میویی"],
-            "factory.ready": ["جمع کارخانه", "شروع کارخانه"],
-            "factory.start": ["ماینر میویی"],
-            "factory.collect": ["شروع کارخانه", "ماینر میویی"],
-            "miner.token": ["فروش توکن", "ارتقا ماینر"],
-            "miner.upgrade": ["ماینر میویی"],
-            "tasks.complete": ["ماموریت های میویی"],
-            "tasks.reward": ["ماموریت های میویی"],
-            "gifts.received": ["گیفت های میویی"],
-            "gifts.open": ["گیفت های میویی"],
-            "cats.new": ["گربه های میویی"],
-            "cooldown.seconds": ["ماینر میویی", "کارخانه میویی"],
-            "cooldown.minutes": ["ماموریت های میویی"],
-            "cooldown.hours": ["پروفایل میویی"],
-            "error.no_money": ["ماموریت های میویی", "ماهیگیری میویی"],
-            "error.no_level": ["ماهیگیری میویی"],
-            "city.upgrade": ["شهر میویی"],
-            "nft.mint": ["NFT میویی"],
-        }
-        actions = []
-        for cat in categories:
-            if cat in mapping:
-                actions.extend(mapping[cat])
-        return list(set(actions))
-
-    def _save_history(self, result: dict):
-        """ذخیره در تاریخچه"""
-        try:
-            history = []
-            if os.path.exists(HISTORY_FILE):
-                with open(HISTORY_FILE, "r", encoding="utf-8") as f:
-                    history = json.load(f)
-
-            history.append({
-                "text": result["text"][:500],
-                "categories": result["categories"],
-                "data": result["data"],
-                "buttons": [b["text"] for b in result["buttons"]],
-                "timestamp": result["timestamp"],
-            })
-
-            if len(history) > 1000:
-                history = history[-1000:]
-
-            with open(HISTORY_FILE, "w", encoding="utf-8") as f:
-                json.dump(history, f, ensure_ascii=False, indent=2)
-        except:
-            pass
-
-    def extract_cooldown(self, text: str) -> int:
-        """استخراج زمان کول‌داون"""
-        if not text:
-            return None
-
-        patterns = [
-            (r'(\d+)\s*ثانیه', 1),
-            (r'(\d+)\s*دقیقه', 60),
-            (r'(\d+)\s*ساعت', 3600),
-            (r'(\d+)\s*روز', 86400),
-        ]
-
-        for pattern, mult in patterns:
-            m = re.search(pattern, text)
-            if m:
-                return int(m.group(1)) * mult
-
-        return None
-
-    def learn(self, text: str, category: str):
-        """یادگیری الگوی جدید"""
-        if category not in self.learned:
-            self.learned[category] = []
-        if text not in self.learned[category]:
-            self.learned[category].append(text[:200])
-            self._save_learned()
-
-    def get_context(self, chat_id: int) -> list:
-        """گرفتن حافظه contextual"""
-        return self.context.get(chat_id, [])
-
-    def clear_context(self, chat_id: int):
-        """پاک کردن حافظه"""
-        self.context.pop(chat_id, None)
-
-
-
-
-class MeowieRuntimeState:
-    """وضعیت مستقل Meowie برای هر اکانت سلف."""
-    def __init__(self):
-        self.stats = {
-            "commands_sent": 0, "money_gained": 0, "money_lost": 0,
-            "fish_caught": 0, "tasks_completed": 0, "gifts_received": 0,
-            "errors": 0, "cooldowns": 0, "buttons_clicked": 0,
-            "level_ups": 0, "nfts_minted": 0, "started_at": time.time(),
-        }
-        self.cooldowns = {}
-        self.balance = 0
-        self.level = 1
-        self.xp = 0
-        self.known_bots = set(MEOWIE_BOTS)
-        self.known_groups = set()
-        self.known_chats = set()
-        self.history = []
-        self.clicked_buttons = set()
-        # یادگیری مستقل برای هر گروه: دستورهای دیده‌شده، پاسخ‌های بات و الگوهای تعامل
-        self.group_learning = {}
-        self.learning_updated_at = {}
-
-    def snapshot(self):
-        return {
-            "stats": dict(self.stats), "cooldowns": dict(self.cooldowns),
-            "balance": self.balance, "level": self.level, "xp": self.xp,
-            "known_bots": sorted(self.known_bots),
-            "known_groups": sorted(self.known_groups),
-            "known_chats": sorted(self.known_chats),
-            "group_learning": self.group_learning,
-            "learning_updated_at": self.learning_updated_at,
-        }
-
-    def load_snapshot(self, data):
-        if not isinstance(data, dict):
-            return
-        self.stats.update(data.get("stats") or {})
-        self.cooldowns.update(data.get("cooldowns") or {})
-        self.balance = int(data.get("balance", self.balance) or 0)
-        self.level = int(data.get("level", self.level) or 1)
-        self.xp = int(data.get("xp", self.xp) or 0)
-        self.known_bots.update(str(x).lower() for x in (data.get("known_bots") or []))
-        self.known_groups.update(int(x) for x in (data.get("known_groups") or []))
-        self.known_chats.update(int(x) for x in (data.get("known_chats") or []))
-        raw_learning = data.get("group_learning") or {}
-        if isinstance(raw_learning, dict):
-            self.group_learning = {str(k): v for k, v in raw_learning.items() if isinstance(v, dict)}
-        raw_updated = data.get("learning_updated_at") or {}
-        if isinstance(raw_updated, dict):
-            self.learning_updated_at = {str(k): float(v) for k, v in raw_updated.items() if isinstance(v, (int, float))}
-
-    def is_cooling(self, chat_id):
-        until = self.cooldowns.get(str(chat_id))
-        if not until:
-            return False
-        if until <= time.time():
-            self.cooldowns.pop(str(chat_id), None)
-            return False
-        return True
-
-    def add_cooldown(self, chat_id, seconds):
-        self.cooldowns[str(chat_id)] = time.time() + int(seconds)
-        self.stats["cooldowns"] += 1
-
-    def mark_button_clicked(self, chat_id, text):
-        self.clicked_buttons.add((int(chat_id), text))
-
-    def is_button_clicked(self, chat_id, text):
-        return (int(chat_id), text) in self.clicked_buttons
-
-    def clear_button(self, chat_id, text):
-        self.clicked_buttons.discard((int(chat_id), text))
-
-    def stats_text(self):
-        st = self.stats
-        up = max(0, int(time.time() - st.get("started_at", time.time())))
-        return (
-            "<b>🐱 Meowie Ultimate</b>\n"
-            "━━━━━━━━━━━━━━━━━━\n"
-            f"وضعیت: <b>{'روشن' if MEOWIE_STATUS.get(self._uid, False) else 'خاموش'}</b>\n"
-            f"⏱ آپ‌تایم: <code>{up//3600}h {(up%3600)//60}m {up%60}s</code>\n"
-            f"📤 دستورات: <code>{st['commands_sent']}</code>\n"
-            f"💰 درآمد: <code>{st['money_gained']}</code>\n"
-            f"💸 هزینه: <code>{st['money_lost']}</code>\n"
-            f"💼 موجودی: <code>{self.balance}</code>\n"
-            f"🏆 سطح: <code>{self.level}</code>\n"
-            f"✨ XP: <code>{self.xp}</code>\n"
-            f"🔘 کلیک‌ها: <code>{st['buttons_clicked']}</code>\n"
-            f"❌ خطا: <code>{st['errors']}</code>\n"
-            f"🤖 ربات‌ها: <code>{len(self.known_bots)}</code>"
-        )
-
-
-def _meowie_state(uid: int) -> MeowieRuntimeState:
-    uid = int(uid)
-    st = MEOWIE_RUNTIME.get(uid)
-    if st is None:
-        st = MeowieRuntimeState()
-        st._uid = uid
-        MEOWIE_RUNTIME[uid] = st
-    return st
-
-
-MEOWIE_ANALYZER = UltimateAnalyzer()
-
-
-def _meowie_enabled(uid: int) -> bool:
-    return bool(MEOWIE_STATUS.get(int(uid), False))
-
-
-def _load_meowie_status(uid: int):
-    uid = int(uid)
-    try:
-        settings = data_manager.get_user_data(uid).get("settings", {})
-        MEOWIE_STATUS[uid] = bool(settings.get("meowie", False))
-        _meowie_state(uid).load_snapshot(settings.get("meowie_state") or {})
-    except Exception:
-        MEOWIE_STATUS.setdefault(uid, False)
-    _meowie_state(uid)
-
-
-def _persist_meowie_runtime(uid: int):
-    try:
-        data_manager.update_user_data(int(uid), {"settings": {"meowie_state": _meowie_state(uid).snapshot()}})
-    except Exception:
-        pass
-
-
-def _persist_meowie_status(uid: int, enabled: bool):
-    uid = int(uid)
-    MEOWIE_STATUS[uid] = bool(enabled)
-    try:
-        data_manager.update_user_data(uid, {"settings": {"meowie": bool(enabled)}})
-    except Exception:
-        pass
-    try:
-        _commit_and_broadcast_shards("meowie-status")
-    except Exception:
-        pass
-
-
-def _is_meowie_bot_message(message: Message, uid: int) -> bool:
-    sender = getattr(message, "from_user", None)
-    if not sender:
-        return False
-    username = (getattr(sender, "username", None) or "").lower()
-    first = (getattr(sender, "first_name", None) or "").lower()
-    last = (getattr(sender, "last_name", None) or "").lower()
-    known = _meowie_state(uid).known_bots
-    if username in MEOWIE_BOTS or username in {x.lower() for x in known}:
-        return True
-    if "meowie" in username or "میو" in first or "میو" in last:
-        return True
-    text = (getattr(message, "text", None) or getattr(message, "caption", None) or "")[:100].lower()
-    return "meowie" in text or "میو" in text
-
-
-MEOWIE_BUTTON_PRIORITY = {
-    "factory.ready": ["جمع", "برداشت", "collect", "دریافت"],
-    "factory.collect": ["جمع", "برداشت", "collect"],
-    "factory.start": ["شروع", "start", "شروع تولید"],
-    "miner.token": ["جمع", "برداشت", "collect", "دریافت"],
-    "miner.upgrade": ["ارتقا", "upgrade", "بهبود"],
-    "fishing.catch": ["صید", "ماهیگیری", "فروش", "بفروش", "آشپزی"],
-    "tasks.complete": ["دریافت", "جایزه", "reward", "گرفتن"],
-    "tasks.reward": ["دریافت", "جایزه", "گرفتن"],
-    "gifts.received": ["دریافت", "باز کردن", "open", "گرفتن"],
-    "gifts.open": ["باز کردن", "open", "دریافت"],
-    "cats.new": ["گرفتن", "برداشتن", "اداپت", "adopt", "پذیرش"],
-    "nft.new": ["خرید", "mint", "ضرب", "ساخت"],
-    "nft.buy": ["خرید", "buy", "تایید"],
-    "nft.sell": ["فروش", "sell", "تایید"],
-    "city.upgrade": ["ارتقا", "upgrade", "تایید"],
-    "city.election": ["رأی", "vote", "تایید"],
-    "market.buy": ["خرید", "buy", "تایید"],
-    "market.sell": ["فروش", "sell", "تایید"],
-    "success.generic": ["تایید", "ادامه", "ok", "باشه"],
-    "error.no_money": ["باشه", "ok", "متوجه شدم"],
-    "error.no_level": ["باشه", "ok"],
-}
-
-MEOWIE_ALLOWED_COMMANDS = [
-    "ماهی",
-    "میو",
-    "یخچال میویی",
-    "میو روشن",
-    "میو خاموش",
-]
-
-# فقط همین ۵ دستور مربوط به Meowie مجاز هستند.
-MEOWIE_COMMANDS = list(MEOWIE_ALLOWED_COMMANDS)
-MEOWIE_COMMANDS_BY_CATEGORY = {
-    "meowie": list(MEOWIE_ALLOWED_COMMANDS),
-}
-
-
-def get_meowie_commands_text() -> str:
-    return "📋 <b>دستورات مجاز میو</b>\n\n" + "\n".join(f"• {cmd}" for cmd in MEOWIE_ALLOWED_COMMANDS)
-
-
-def search_meowie_commands(keyword: str) -> list:
-    key = (keyword or "").lower()
-    return [("meowie", cmd) for cmd in MEOWIE_ALLOWED_COMMANDS if key in cmd.lower()]
-
-
-def _meowie_group_learning(uid: int, chat_id: int) -> dict:
-    st = _meowie_state(uid)
-    key = str(int(chat_id))
-    item = st.group_learning.get(key)
-    if not isinstance(item, dict):
-        item = {"user_commands": {}, "bot_responses": [], "flows": {}, "last_day": ""}
-        st.group_learning[key] = item
-    item.setdefault("user_commands", {})
-    item.setdefault("bot_responses", [])
-    item.setdefault("flows", {})
-    item.setdefault("last_day", "")
-    return item
-
-
-def _meowie_learning_day() -> str:
-    return datetime.now(TEHRAN_TIMEZONE).strftime("%Y-%m-%d")
-
-
-def _normalize_meowie_command(text: str) -> str:
-    return re.sub(r"\s+", " ", (text or "").strip()).lower()
-
-
-def _looks_like_meowie_command(text: str) -> bool:
-    clean = _normalize_meowie_command(text)
-    return clean in {cmd.lower() for cmd in MEOWIE_ALLOWED_COMMANDS}
-
-
-def _learn_user_group_message(uid: int, message: Message):
-    """فقط الگوهای مرتبط با Meowie را از کاربران همان گروه یاد می‌گیرد."""
-    if message.chat.type not in (ChatType.GROUP, ChatType.SUPERGROUP):
-        return
-    st = _meowie_state(uid)
-    gid = int(message.chat.id)
-    if gid not in st.known_groups:
-        return
-    sender = getattr(message, "from_user", None)
-    if not sender or getattr(sender, "is_bot", False):
-        return
-    text = (getattr(message, "text", None) or getattr(message, "caption", None) or "").strip()
-    if not _looks_like_meowie_command(text):
-        return
-    text = " ".join(text.split())[:120]
-    learning = _meowie_group_learning(uid, gid)
-    counts = learning["user_commands"]
-    counts[text] = int(counts.get(text, 0)) + 1
-    # جلوگیری از رشد بی‌نهایت حافظه
-    if len(counts) > 250:
-        for k, _ in sorted(counts.items(), key=lambda kv: kv[1])[:50]:
-            counts.pop(k, None)
-
-
-def _learn_bot_group_message(uid: int, message: Message, analysis: dict):
-    if message.chat.type not in (ChatType.GROUP, ChatType.SUPERGROUP):
-        return
-    st = _meowie_state(uid)
-    gid = int(message.chat.id)
-    if gid not in st.known_groups:
-        return
-    learning = _meowie_group_learning(uid, gid)
-    text = (analysis.get("text") or "").strip()[:500]
-    if text:
-        learning["bot_responses"].append({"text": text, "ts": time.time()})
-        learning["bot_responses"] = learning["bot_responses"][-100:]
-    actions = list(analysis.get("next_actions") or [])
-    if actions:
-        key = "|".join(sorted(set(actions)))[:300]
-        learning["flows"][key] = int(learning["flows"].get(key, 0)) + 1
-
-
-def _daily_meowie_learning_update(uid: int):
-    """هر روز الگوهای پرتکرار گروه را به دستورهای قابل استفاده تبدیل می‌کند."""
-    st = _meowie_state(uid)
-    today = _meowie_learning_day()
-    changed = False
-    for gid in list(st.known_groups):
-        learning = _meowie_group_learning(uid, gid)
-        if learning.get("last_day") == today:
-            continue
-        counts = learning.get("user_commands", {})
-        learned = []
-        for cmd, count in counts.items():
-            if int(count) >= 2 and cmd not in learned:
-                learned.append(cmd)
-        # فقط دستورهایی که واقعاً در همان گروه تکرار شده‌اند وارد لیست می‌شوند.
-        learning["learned_commands"] = learned[:80]
-        learning["last_day"] = today
-        st.learning_updated_at[str(gid)] = time.time()
-        changed = True
-    if changed:
-        _persist_meowie_runtime(uid)
-    return changed
-
-
-def _meowie_learned_commands(uid: int, chat_id: int) -> list:
-    learning = _meowie_group_learning(uid, int(chat_id))
-    learned = learning.get("learned_commands") or []
-    allowed = {"ماهی", "میو", "یخچال میویی"}
-    return [str(x)[:120] for x in learned if isinstance(x, str) and _normalize_meowie_command(x) in allowed]
-
-
-def _meowie_smart_command(uid: int, chat_id=None) -> str:
-    # یادگیری فقط می‌تواند بین سه دستور فعالیتی انتخاب کند؛
-    # «میو روشن/خاموش» هرگز دستور خودکار نیست.
-    if chat_id is not None:
-        learned = _meowie_learned_commands(uid, int(chat_id))
-        if learned:
-            return random.choice(learned)
-    return random.choice(["ماهی", "میو", "یخچال میویی"])
-
-
-async def _meowie_click_button(client: Client, message: Message, analysis: dict, uid: int):
-    if not analysis.get("buttons") or not _meowie_enabled(uid):
-        return
-    selected = None
-    for cat in analysis.get("categories", []):
-        kws = MEOWIE_BUTTON_PRIORITY.get(cat, [])
-        for btn in analysis["buttons"]:
-            text = (btn.get("text") or "").lower()
-            if any(k.lower() in text for k in kws):
-                selected = btn
-                break
-        if selected:
-            break
-    if not selected:
-        selected = next((b for b in analysis["buttons"] if b.get("callback_data")), None)
-    if not selected or not selected.get("callback_data"):
-        return
-    st = _meowie_state(uid)
-    if st.is_button_clicked(message.chat.id, selected.get("text", "")):
-        return
-    try:
-        await asyncio.sleep(random.uniform(MEOWIE_CLICK_DELAY_MIN, MEOWIE_CLICK_DELAY_MAX))
-        if not _meowie_enabled(uid):
-            return
-        await client.request_callback_answer(
-            chat_id=message.chat.id,
-            message_id=message.id,
-            callback_data=selected["callback_data"],
-        )
-        st.stats["buttons_clicked"] += 1
-        label = selected.get("text", "")
-        st.mark_button_clicked(message.chat.id, label)
-        asyncio.create_task(_meowie_clear_button_later(st, message.chat.id, label))
-    except FloodWait as fw:
-        await asyncio.sleep(fw.value + 5)
-    except Exception:
-        st.stats["errors"] += 1
-
-
-async def _meowie_clear_button_later(st, chat_id, label):
-    await asyncio.sleep(300)
-    st.clear_button(chat_id, label)
-
-
-async def _handle_meowie_message(client: Client, message: Message, uid: int):
-    # Meowie فقط در گروه/سوپرگروه مجاز است؛ هیچ PV یا چت دیگری پردازش نمی‌شود.
-    if message.chat.type not in (ChatType.GROUP, ChatType.SUPERGROUP):
-        return
-    if not _meowie_enabled(uid) or not _is_meowie_bot_message(message, uid):
-        return
-    st = _meowie_state(uid)
-    try:
-        analysis = MEOWIE_ANALYZER.analyze(message, message.chat.id)
-        for cat in analysis["categories"]:
-            num = analysis["data"].get(cat, 0)
-            if cat == "money.gain":
-                st.stats["money_gained"] += num; st.balance += num
-            elif cat == "money.loss":
-                st.stats["money_lost"] += num; st.balance -= num
-            elif cat == "money.balance":
-                st.balance = num
-            elif cat == "level.level":
-                old = st.level; st.level = num
-                if st.level > old: st.stats["level_ups"] += 1
-            elif cat == "level.xp":
-                st.xp = num
-            elif cat == "fishing.catch": st.stats["fish_caught"] += 1
-            elif cat == "tasks.complete": st.stats["tasks_completed"] += 1
-            elif cat == "gifts.received": st.stats["gifts_received"] += 1
-            elif cat == "nft.mint": st.stats["nfts_minted"] += 1
-            elif cat.startswith("error."): st.stats["errors"] += 1
-        cooldown = MEOWIE_ANALYZER.extract_cooldown(analysis["text"])
-        if cooldown:
-            st.add_cooldown(message.chat.id, cooldown)
-        if message.from_user and message.from_user.username:
-            st.known_bots.add(message.from_user.username.lower())
-        try:
-            _learn_bot_group_message(uid, message, analysis)
-        except Exception:
-            pass
-        await _meowie_click_button(client, message, analysis, uid)
-        for cat in analysis["categories"]:
-            MEOWIE_ANALYZER.learn(analysis["text"][:100], cat)
-    except Exception as exc:
-        st.stats["errors"] += 1
-        logger.debug("Meowie analyzer error for %s: %s", uid, exc)
-
-
-async def meowie_incoming_handler(client: Client, message: Message):
-    uid = int(client.me.id)
-    if not _meowie_enabled(uid):
-        return
-    st = _meowie_state(uid)
-    try:
-        st.known_chats.add(int(message.chat.id))
-        if message.chat.type in (ChatType.GROUP, ChatType.SUPERGROUP):
-            # همان منطق تشخیص گروه m.Txt، ولی scoped به همان اکانت.
-            if int(message.chat.id) not in st.known_groups:
-                member_count = getattr(message.chat, "members_count", 0)
-                if not member_count or member_count <= 5000:
-                    async for member in client.get_chat_members(message.chat.id, limit=200):
-                        user = getattr(member, "user", None)
-                        if not user or not getattr(user, "is_bot", False):
-                            continue
-                        username = (getattr(user, "username", None) or "").lower()
-                        name = (getattr(user, "first_name", None) or "").lower()
-                        if username in MEOWIE_BOTS or "meowie" in username or "میو" in name:
-                            st.known_groups.add(int(message.chat.id))
-                            break
-    except Exception:
-        pass
-    # یادگیری کاربران فقط در گروه‌های دارای Meowie انجام می‌شود.
-    try:
-        _learn_user_group_message(uid, message)
-    except Exception:
-        pass
-    await _handle_meowie_message(client, message, uid)
-    _persist_meowie_runtime(uid)
-
-
-async def has_meowie_in_group(client, chat_id) -> bool:
-    """چک کن @MeowieQIVBot (یا هر ربات Meowie) توی گروه هست."""
-    try:
-        async for member in client.get_chat_members(chat_id, limit=200):
-            user = getattr(member, "user", None)
-            if not user or not getattr(user, "is_bot", False):
-                continue
-            username = (getattr(user, "username", None) or "").lower()
-            name = (getattr(user, "first_name", None) or "").lower()
-            if username in {"meowieqivbot", "meowieqbot", "meowieeqbot"}:
-                return True
-            if "meowie" in username or "میو" in name or "meowie" in name:
-                return True
-    except Exception as e:
-        logger.debug("Meowie group check error for %s: %s", chat_id, type(e).__name__)
-    return False
-
-
-async def scan_all_groups(client, uid: int):
-    """همه گروه‌های اکانت را چک کن و گروه‌های دارای Meowie را پیدا کن."""
-    st = _meowie_state(uid)
-    found_new = 0
-    total_groups = 0
-    checked = 0
-    try:
-        async for dialog in client.get_dialogs():
-            try:
-                chat = dialog.chat
-                if chat.type not in (ChatType.GROUP, ChatType.SUPERGROUP):
-                    continue
-                total_groups += 1
-                if chat.id in st.known_groups:
-                    continue
-                member_count = getattr(chat, "members_count", 0)
-                if member_count and member_count > 10000:
-                    continue
-                checked += 1
-                if await has_meowie_in_group(client, chat.id):
-                    st.known_groups.add(int(chat.id))
-                    found_new += 1
-            except Exception:
-                continue
-    except Exception as e:
-        logger.debug("Meowie group scan error for %s: %s", uid, type(e).__name__)
-    if found_new:
-        _persist_meowie_runtime(uid)
-    logger.info("Meowie group scan uid=%s total=%s checked=%s new=%s", uid, total_groups, checked, found_new)
-    return found_new
-
-
-# چرخه ۶۰ ثانیه‌ای — سه دستور با فاصله ۱۰ ثانیه
-CYCLE_COMMANDS = [
-    "میو",              # ثانیه ۰
-    "ماهی",             # ثانیه ۱۰
-    "یخچال میویی",      # ثانیه ۲۰
-]
-CYCLE_INTERVAL = 10
-CYCLE_DURATION = 60
-
-
-async def run_cycle_for_target(client, target, target_name: str, uid: int):
-    """اجرای یک چرخه کامل برای یک هدف."""
-    st = _meowie_state(uid)
-    cycle_start = time.time()
-    for idx, cmd in enumerate(CYCLE_COMMANDS):
-        if not _meowie_enabled(uid) or st.is_cooling(target):
-            return
-        try:
-            await client.send_message(target, cmd)
-            st.stats["commands_sent"] += 1
-            logger.info("Meowie cycle %s: %s", target_name, cmd)
-        except FloodWait as e:
-            st.add_cooldown(target, e.value)
-            await asyncio.sleep(e.value + 5)
-            return
-        except Exception as e:
-            err = str(e)
-            if "CHAT_WRITE_FORBIDDEN" in err or "PEER_ID_INVALID" in err or "CHANNEL_PRIVATE" in err:
-                if isinstance(target, int):
-                    st.known_groups.discard(target)
-            else:
-                st.stats["errors"] += 1
-            return
-        if idx < len(CYCLE_COMMANDS) - 1:
-            await asyncio.sleep(CYCLE_INTERVAL)
-
-    elapsed = time.time() - cycle_start
-    remaining = CYCLE_DURATION - elapsed
-    if remaining > 0:
-        await asyncio.sleep(remaining)
-
-
-async def cycle_all_targets(client, uid: int):
-    """اجرای چرخه فقط داخل گروه‌ها و سوپرگروه‌های شناسایی‌شده."""
-    st = _meowie_state(uid)
-    tasks = []
-    # عمداً known_bots اینجا استفاده نمی‌شود؛ Meowie فقط داخل گروه‌ها فعال است.
-    for group_id in list(st.known_groups):
-        if st.is_cooling(group_id):
-            continue
-        tasks.append(asyncio.create_task(
-            run_cycle_for_target(client, group_id, f"گروه {group_id}", uid)
-        ))
-    if tasks:
-        await asyncio.gather(*tasks, return_exceptions=True)
-
-
-async def meowie_auto_loop(client: Client, uid: int):
-    """حلقه اصلی Meowie؛ چرخه ۶۰ ثانیه‌ای طبق نسخه ارسالی کاربر."""
-    try:
-        iteration = 0
-        while uid in ACTIVE_BOTS:
-            if not SELF_ACTIVE_STATUS.get(uid, True) or not _meowie_enabled(uid):
-                await asyncio.sleep(3)
-                continue
-            iteration += 1
-            try:
-                await cycle_all_targets(client, uid)
-            except Exception as e:
-                logger.debug("Meowie cycle error for %s: %s", uid, type(e).__name__)
-            _persist_meowie_runtime(uid)
-            await asyncio.sleep(5)
-    except asyncio.CancelledError:
-        return
-
-
-async def meowie_group_scanner_loop(client: Client, uid: int):
-    """اسکن گروه‌ها هر ۱۰ دقیقه."""
-    try:
-        await asyncio.sleep(5)
-        while uid in ACTIVE_BOTS:
-            if _meowie_enabled(uid):
-                try:
-                    await scan_all_groups(client, uid)
-                except Exception as e:
-                    logger.debug("Meowie initial/periodic scan error for %s: %s", uid, type(e).__name__)
-            await asyncio.sleep(600)
-    except asyncio.CancelledError:
-        return
-
-
-async def meowie_daily_learning_loop(client: Client, uid: int):
-    """به‌روزرسانی یادگیری Meowie هر ۲۴ ساعت برای هر گروه."""
-    try:
-        while uid in ACTIVE_BOTS:
-            if _meowie_enabled(uid):
-                try:
-                    _daily_meowie_learning_update(uid)
-                except Exception as e:
-                    logger.debug("Meowie daily learning error for %s: %s", uid, type(e).__name__)
-            await asyncio.sleep(86400)
-    except asyncio.CancelledError:
-        return
-
-
-async def meowie_command_controller(client: Client, message: Message):
-    uid = int(client.me.id)
-    if not await check_global_fjoin_for_user(uid, message):
-        return
-    cmd = get_cmd(uid, message.text)
-    if cmd is None:
-        return
-    clean = re.sub(r"\s+", " ", cmd.strip())
-    normalized = clean.lower()
-
-    # تنها دستورات مجاز Meowie:
-    # ماهی / میو / یخچال میویی / میو روشن / میو خاموش
-    if normalized not in {x.lower() for x in MEOWIE_ALLOWED_COMMANDS}:
-        return
-
-    if normalized in {"ماهی", "میو", "یخچال میویی"}:
-        if not _meowie_enabled(uid):
-            await _safe_edit_or_reply(message, "🐱 <b>میو خاموش است.</b> برای فعال‌سازی «میو روشن» را بفرستید.")
-            return
-        try:
-            await cycle_all_targets(client, uid)
-        except Exception as e:
-            logger.debug("Manual Meowie command error for %s: %s", uid, type(e).__name__)
-        return
-
-    new_state = normalized == "میو روشن"
-    _persist_meowie_status(uid, new_state)
-    task = MEOWIE_TASKS.get(uid)
-    if new_state:
-        if task is None or task.done():
-            task = asyncio.create_task(meowie_auto_loop(client, uid), name=f"meowie-{uid}")
-            MEOWIE_TASKS[uid] = task
-            active = ACTIVE_BOTS.get(uid)
-            if active:
-                active[1].append(asyncio.create_task(meowie_group_scanner_loop(client, uid), name=f"meowie-scan-{uid}"))
-                active[1].append(asyncio.create_task(meowie_daily_learning_loop(client, uid), name=f"meowie-learn-{uid}"))
-        await _safe_edit_or_reply(message, "🐱 <b>میو روشن شد.</b>\nتحلیل‌گر، تشخیص پاسخ‌ها، کلیک هوشمند و حلقهٔ خودکار فعال است.")
-    else:
-        if task and not task.done():
-            task.cancel()
-        MEOWIE_TASKS.pop(uid, None)
-        await _safe_edit_or_reply(message, "🐱 <b>میو خاموش شد.</b>\nتمام پردازش و ارسال خودکار Meowie برای این اکانت متوقف شد.")
-
 PV_PHOTO_LOCK ,PV_VIDEO_LOCK ,PV_GIF_LOCK ,PV_VOICE_LOCK ={},{},{},{}
 PV_MUSIC_LOCK ,PV_STICKER_LOCK ,PV_DOC_LOCK ={},{},{}
 PV_LOC_LOCK ,PV_EMO_LOCK ,PV_TXT_LOCK ={},{},{}
@@ -3992,7 +2843,7 @@ async def schedule_inline_auto_close_by_chat (kind :str ,uid :int ,client ,chat_
                         via_ok =bool (via_bot and BOT_USERNAME and getattr (via_bot ,"username","").lower ()==BOT_USERNAME .lower ())
                     except Exception :
                         pass 
-                    text_ok ="𝗩𝗢𝗟𝗗𝗬𝗦𝗘𝗟𝗙"in txt or "VOLDYSELF"in txt or (kind =="help"and "COMMAND CENTER"in txt )
+                    text_ok ="𝗗𝗔𝗥𝗞𝗦𝗘𝗟𝗙"in txt or "DARKSELF"in txt or (kind =="help"and "COMMAND CENTER"in txt )
                     if has_markup or via_ok or text_ok :
                         candidate =msg 
                         break 
@@ -4039,7 +2890,7 @@ async def register_auto_close_after_inline_send (kind :str ,uid :int ,client ,ch
                     continue 
                 via_bot =getattr (msg ,"via_bot",None )
                 txt =(getattr (msg ,"text",None )or getattr (msg ,"caption",None )or "")
-                if (manager_id and via_bot and via_bot .id ==manager_id )or "𝗩𝗢𝗟𝗗𝗬𝗦𝗘𝗟𝗙"in txt or "VOLDYSELF"in txt :
+                if (manager_id and via_bot and via_bot .id ==manager_id )or "𝗗𝗔𝗥𝗞𝗦𝗘𝗟𝗙"in txt or "DARKSELF"in txt :
                     candidate =msg 
                     break 
             except Exception :
@@ -4243,10 +3094,11 @@ def clean_dynamic_bio_text (text :str )->str :
     dyn_chars =re .escape (ALL_CLOCK_CHARS )
     digit_class =dyn_chars +r"0-9۰-۹٠-٩"
 
+    # Only strip what this feature itself appends: a clock (HH:MM) and/or a full date (YYYY/MM/DD).
+    # Ordinary trailing numbers in the user's bio (phone numbers, "24/7", years) must stay untouched.
     dynamic_tail_patterns =[
-    r"(?:(?:^|\s+)["+digit_class +r"]{1,4}(?:[:∶：]["+digit_class +r"]{1,2})+)+$",
-    r"(?:(?:^|\s+)["+digit_class +r"]{2,4}(?:[\/\-.]["+digit_class +r"]{1,2}){1,2})+$",
-    r"(?:(?:^|\s+)(?:["+digit_class +r"]+(?:[:∶：\/\-.]["+digit_class +r"]+)*)+)+$",
+    r"(?:(?:^|\s+)["+digit_class +r"]{1,4}[:∶：]["+digit_class +r"]{1,2})+$",
+    r"(?:(?:^|\s+)["+digit_class +r"]{4}[\/\-.]["+digit_class +r"]{1,2}[\/\-.]["+digit_class +r"]{1,2})+$",
     ]
 
     prev =None 
@@ -4287,6 +3139,22 @@ async def perform_clock_update_now (client ,user_id ):
     except Exception :
         pass 
 
+def _bio_limit (client ):
+    try :
+        return 140 if getattr (getattr (client ,"me",None ),"is_premium",False )else 70 
+    except Exception :
+        return 70 
+
+def _compose_bio (base ,dyn_parts ,limit ):
+    dyn =' '.join (p for p in dyn_parts if p ).strip ()
+    base =(base or '').strip ()
+    if not dyn :
+        return base [:limit ]
+    room =limit -len (dyn )-1 
+    if room <=0 or not base :
+        return dyn [:limit ]
+    return (base [:room ].rstrip ()+' '+dyn ).strip ()
+
 async def perform_bio_update_now (client ,user_id ):
     try :
         if COPY_MODE_STATUS .get (user_id ,False ):
@@ -4294,78 +3162,59 @@ async def perform_bio_update_now (client ,user_id ):
 
         bio_clock_on =BIO_CLOCK_STATUS .get (user_id ,False )
         bio_date_on =BIO_DATE_STATUS .get (user_id ,False )
-
-        if not bio_clock_on and not bio_date_on :
-            base_bio =CACHE_BIOS .get (user_id )
-            if base_bio is not None :
-                try :
-                    await client .update_profile (bio =base_bio .strip ()[:70 ])
-                except FloodWait as fw :
-                    await asyncio .sleep (fw .value +2 )
-                except Exception :
-                    pass 
-            return 
+        limit =_bio_limit (client )
 
         base_bio =CACHE_BIOS .get (user_id )
-        t_now =datetime .now (TEHRAN_TIMEZONE )
-        bio_font =BIO_FONT_CHOICE .get (user_id ,'stylized')
-        font_map =FONT_STYLES .get (bio_font ,FONT_STYLES ['stylized'])
-
-        new_bio_parts =[base_bio ]if base_bio else []
-        if bio_clock_on :
-            t_str =t_now .strftime ("%H:%M")
-            new_bio_parts .append (stylize_time (t_str ,bio_font ))
-
-        if bio_date_on :
-            date_type =BIO_DATE_TYPE .get (user_id ,'jalali')
-            if date_type =='jalali'and jdatetime :
-                date_str =jdatetime .datetime .fromgregorian (datetime =t_now ).strftime ("%Y/%m/%d")
-            else :
-                date_str =t_now .strftime ("%Y/%m/%d")
-            stylized_date =''.join (font_map .get (c ,c )for c in date_str )
-            new_bio_parts .append (stylized_date )
-
-        new_bio =' '.join (part for part in new_bio_parts if part ).strip ()[:70 ]
-
-        last_sent_bio =CACHE_LAST_SENT_BIO .get (user_id )
-        if new_bio ==last_sent_bio :
-            return 
-
         if base_bio is None :
+            if not bio_clock_on and not bio_date_on :
+                # Feature is off and nothing was cached: only repair a leftover clock tail, never touch a normal bio.
+                peer =await safe_resolve_peer (client ,"me")
+                if not peer :
+                    return 
+                me_full =await client .invoke (functions .users .GetFullUser (id =peer ))
+                live =(me_full .full_user .about or '').strip ()
+                if re .search (r"[:∶：]",live [-12 :]):
+                    cleaned =clean_dynamic_bio_text (live )
+                    if cleaned !=live :
+                        await client .update_profile (bio =cleaned [:limit ])
+                        CACHE_LAST_SENT_BIO [user_id ]=cleaned [:limit ]
+                return 
             peer =await safe_resolve_peer (client ,"me")
             if not peer :
                 return 
             me_full =await client .invoke (functions .users .GetFullUser (id =peer ))
-            curr_bio =me_full .full_user .about or ''
-            base_bio =clean_dynamic_bio_text (curr_bio )
+            base_bio =clean_dynamic_bio_text (me_full .full_user .about or '')
             CACHE_BIOS [user_id ]=base_bio 
 
-            new_bio_parts =[base_bio ]if base_bio else []
+        if not bio_clock_on and not bio_date_on :
+            target =base_bio .strip ()[:limit ]
+        else :
+            t_now =datetime .now (TEHRAN_TIMEZONE )
+            bio_font =BIO_FONT_CHOICE .get (user_id ,'stylized')
+            font_map =FONT_STYLES .get (bio_font ,FONT_STYLES ['stylized'])
+            dyn_parts =[]
             if bio_clock_on :
-                t_str =t_now .strftime ("%H:%M")
-                new_bio_parts .append (stylize_time (t_str ,bio_font ))
+                dyn_parts .append (stylize_time (t_now .strftime ("%H:%M"),bio_font ))
             if bio_date_on :
                 date_type =BIO_DATE_TYPE .get (user_id ,'jalali')
                 if date_type =='jalali'and jdatetime :
                     date_str =jdatetime .datetime .fromgregorian (datetime =t_now ).strftime ("%Y/%m/%d")
                 else :
                     date_str =t_now .strftime ("%Y/%m/%d")
-                stylized_date =''.join (font_map .get (c ,c )for c in date_str )
-                new_bio_parts .append (stylized_date )
-            new_bio =' '.join (part for part in new_bio_parts if part ).strip ()[:70 ]
-        else :
+                dyn_parts .append (''.join (font_map .get (c ,c )for c in date_str ))
+            target =_compose_bio (base_bio ,dyn_parts ,limit )
 
-            base_bio =clean_dynamic_bio_text (base_bio )
-            CACHE_BIOS [user_id ]=base_bio 
-
-        if new_bio !=last_sent_bio :
-            try :
-                await client .update_profile (bio =new_bio )
-                CACHE_LAST_SENT_BIO [user_id ]=new_bio 
-            except FloodWait as fw :
-                await asyncio .sleep (fw .value +2 )
-    except Exception :
-        pass 
+        if target ==CACHE_LAST_SENT_BIO .get (user_id ):
+            return 
+        try :
+            await client .update_profile (bio =target )
+            CACHE_LAST_SENT_BIO [user_id ]=target 
+        except FloodWait as fw :
+            await asyncio .sleep (fw .value +2 )
+    except asyncio .CancelledError :
+        raise 
+    except Exception as e :
+        logger .warning (f"bio update failed for {user_id }: {type (e ).__name__ }: {e }")
 
 async def update_profile_clock (client :Client ,user_id :int ):
     while user_id in ACTIVE_BOTS :
@@ -4585,7 +3434,7 @@ async def help_cmd_handler (client ,message ):
             await safe_edit_message (message ,"**Inline Mode ربات مدیریت غیرفعال است.**")
         else :
             try :
-                await safe_edit_message (message ,"**راهنمای VOLDYSELF در حال حاضر قابل نمایش نیست.**\n`Inline Mode` ربات مدیریت را بررسی کنید.")
+                await safe_edit_message (message ,"**راهنمای DARKSELF در حال حاضر قابل نمایش نیست.**\n`Inline Mode` ربات مدیریت را بررسی کنید.")
             except Exception :
                 pass 
 
@@ -5203,7 +4052,7 @@ def build_wallet_text (wallet_key :str ,wallet_data :dict )->str :
         return f"**ولت {title } تنظیم نشده است.**"
     return (
     f"╔══════════════════════════════╗\n"
-    f"        **𝗩𝗢𝗟𝗗𝗬𝗦𝗘𝗟𝗙 | WALLET**\n"
+    f"        **𝗗𝗔𝗥𝗞𝗦𝗘𝗟𝗙 | WALLET**\n"
     f"╚══════════════════════════════╝\n\n"
     f"**ولت:** `{title }`\n"
     f"**آدرس:**\n`{address }`\n\n"
@@ -5214,7 +4063,7 @@ def build_wallet_list_text (uid :int )->str :
     wallets =get_user_wallets (uid )
     rows =[
     "╔══════════════════════════════╗",
-    "        **𝗩𝗢𝗟𝗗𝗬𝗦𝗘𝗟𝗙 | WALLETS**",
+    "        **𝗗𝗔𝗥𝗞𝗦𝗘𝗟𝗙 | WALLETS**",
     "╚══════════════════════════════╝",
     ""
     ]
@@ -5708,16 +4557,18 @@ async def secretary_auto_reply_handler (client ,message ):
         if tid not in replied :
             if not _report_guard_can_send (uid ,"auto_reply"):
                 return 
+            replied .add (tid )   # reserve first: parallel messages from the same chat must not get several replies
             try :
                 await asyncio .sleep (random .uniform (1.0 ,3.0 ))
                 sec_msg =CUSTOM_SECRETARY_MESSAGES .get (uid )or DEFAULT_SECRETARY_MESSAGE 
                 await message .reply_text (sec_msg )
                 _report_guard_mark_send (uid ,"auto_reply")
-                replied .add (tid )
                 data_manager .update_user_data (uid ,{"replied_users":list (replied )})
             except FloodWait as fw :
+                replied .discard (tid )
                 await asyncio .sleep (fw .value +2 )
             except Exception as e :
+                replied .discard (tid )
                 await _report_guard_handle_error (client ,uid ,e ,"secretary")
 
 async def set_secretary_message_controller (client ,message ):
@@ -6962,63 +5813,7 @@ async def id_command_handler (client ,message ):
     )
     await safe_edit_message (message ,text )
 
-# ═══════════════════════════════════════════════════════════════════
-# PREMIUM CUSTOM EMOJI SYSTEM
-# ═══════════════════════════════════════════════════════════════════
-PREMIUM_EMOJIS_NAMED = {
-    "ایموجی_1": "5201842948991362038",
-    "ایموجی_2": "5201676729462038925",
-    "ایموجی_3": "5201699205025899297",
-    "ایموجی_4": "5201790352821854583",
-    "ایموجی_5": "5201836034094014407",
-    "ایموجی_6": "5202086546651488293",
-    "ایموجی_7": "5199755186863613548",
-    "ایموجی_8": "5202189673111232992",
-    "ایموجی_9": "5201773542319858385",
-    "ایموجی_10": "5201822543601738009",
-    "ایموجی_11": "5201745564902891277",
-    "ایموجی_12": "5202066622298202095",
-    "ایموجی_13": "5201864445302677789",
-    "ایموجی_14": "5202218835939172092",
-    "ایموجی_15": "5201895558045770212",
-    "ایموجی_16": "5201884554339557917",
-    "ایموجی_17": "5199893862767666127",
-    "ایموجی_18": "5201848098657147788",
-    "ایموجی_19": "5201718493724024824",
-    "ایموجی_20": "5202122315139130242",
-    "ایموجی_21": "5202072356079542448",
-    "ایموجی_22": "5199836172766945400",
-    "ایموجی_23": "5202177750282019573",
-    "ایموجی_24": "5201787505258537999",
-    "ایموجی_25": "5201841076385620410",
-}
-_PREMIUM_EMOJI_IDS = tuple(PREMIUM_EMOJIS_NAMED.values())
-_PREMIUM_EMOJI_CURSOR = 0
-
-def _next_premium_emoji_id():
-    global _PREMIUM_EMOJI_CURSOR
-    if not _PREMIUM_EMOJI_IDS:
-        return None
-    value = _PREMIUM_EMOJI_IDS[_PREMIUM_EMOJI_CURSOR % len(_PREMIUM_EMOJI_IDS)]
-    _PREMIUM_EMOJI_CURSOR += 1
-    return value
-
-def _premiumize_text(text, kwargs):
-    # One unique custom emoji per UI message; never stack duplicates in one message.
-    if not isinstance(text, str) or not text or kwargs.get("entities") is not None:
-        return text, kwargs
-    emoji_id = _next_premium_emoji_id()
-    if not emoji_id:
-        return text, kwargs
-    prefix = "✦ "
-    text = prefix + text
-    entities = list(kwargs.pop("entities", []) or [])
-    entities.insert(0, MessageEntity(type="custom_emoji", offset=0, length=1, custom_emoji_id=str(emoji_id)))
-    kwargs["entities"] = entities
-    return text, kwargs
-
 async def safe_edit_message (message ,text ,**kwargs ):
-    text, kwargs = _premiumize_text(text, kwargs)
     try :
         return await message .edit_text (text ,**kwargs )
     except (MessageIdInvalid ,MessageNotModified ,NotAcceptable ):
@@ -7030,12 +5825,11 @@ async def safe_edit_message (message ,text ,**kwargs ):
         return None 
 
 async def _safe_edit_or_reply (message ,text ):
-    text, kwargs = _premiumize_text(text, {})
     try :
-        return await message .edit_text (text ,**kwargs )
+        return await message .edit_text (text )
     except (MessageIdInvalid ,MessageNotModified ,NotAcceptable ):
         try :
-            return await message .reply_text (text ,**kwargs )
+            return await message .reply_text (text )
         except Exception :
             pass 
     except FloodWait as fw :
@@ -7075,7 +5869,7 @@ def build_action_panel_markup_json (owner_uid :int ,chat_id :int ,target_id :int
 def build_action_panel_text (owner_uid :int ,chat_id :int ,target_id :int ):
     return (
     "╔══════════════════════════════╗\n"
-    "        **𝗩𝗢𝗟𝗗𝗬𝗦𝗘𝗟𝗙 | ACTION**\n"
+    "        **𝗗𝗔𝗥𝗞𝗦𝗘𝗟𝗙 | ACTION**\n"
     "╚══════════════════════════════╝\n\n"
     f"`USER` `{target_id }`\n"
     f"`CHAT` `{chat_id }`\n\n"
@@ -7517,10 +6311,14 @@ def clean_search_sentence (text :str )->str :
     text =" ".join (good ).strip ()if good else text 
     return text [:450 ].strip ()
 
+def make_basic_search_answer (query ):
+    q =str (query ).strip ()[:120 ]
+    return f"🔎 نتیجه‌ی قابل اتکایی برای «{q }» پیدا نشد.\n\nسوالت رو دقیق‌تر یا با کلمات دیگه بنویس و دوباره امتحان کن."
+
 def build_dental_answer (query :str )->str :
     return (
     f"╔══════════════════════════════╗\n"
-    f"        **𝗩𝗢𝗟𝗗𝗬𝗦𝗘𝗟𝗙 | SEARCH**\n"
+    f"        **𝗗𝗔𝗥𝗞𝗦𝗘𝗟𝗙 | SEARCH**\n"
     f"╚══════════════════════════════╝\n\n"
     f"**موضوع:** `{query }`\n\n"
     f"**متن دقیق برای مطالعه:**\n"
@@ -7587,7 +6385,7 @@ async def search_topic_controller (client ,message ):
 
         text =(
         f"╔══════════════════════════════╗\n"
-        f"        **𝗩𝗢𝗟𝗗𝗬𝗦𝗘𝗟𝗙 | SEARCH**\n"
+        f"        **𝗗𝗔𝗥𝗞𝗦𝗘𝗟𝗙 | SEARCH**\n"
         f"╚══════════════════════════════╝\n\n"
         f"**موضوع:** `{query }`\n\n"
         f"**متن پیشنهادی برای مطالعه:**\n{summary }"
@@ -8057,7 +6855,7 @@ def build_datetime_answer (now :datetime ,mode :str ="تاریخ")->str :
 
     return (
     f"╔══════════════════════════════╗\n"
-    f"        **𝗩𝗢𝗟𝗗𝗬𝗦𝗘𝗟𝗙 | {title }**\n"
+    f"        **𝗗𝗔𝗥𝗞𝗦𝗘𝗟𝗙 | {title }**\n"
     f"╚══════════════════════════════╝\n\n"
     f"🕰 **ساعت تهران:** `{time_24 }`\n"
     f"⌚️ **فرمت ۱۲ ساعته:** `{time_12 }`\n"
@@ -8176,7 +6974,7 @@ def build_backup_html (chat_title :str ,messages :list ,self_id :int ,exported_a
 </style>
 </head>
 <body>
-<div class="header"><div class="brand">VOLDYSELF BACKUP</div><div class="title">{esc_title }</div><div class="meta">تعداد پیام‌ها: {count_text }<br>زمان بکاپ: {exported_text } Asia/Tehran</div></div>
+<div class="header"><div class="brand">DARKSELF BACKUP</div><div class="title">{esc_title }</div><div class="meta">تعداد پیام‌ها: {count_text }<br>زمان بکاپ: {exported_text } Asia/Tehran</div></div>
 <div class="chat">''']
     last_day =None 
     for msg in messages :
@@ -8210,7 +7008,7 @@ def build_backup_html (chat_title :str ,messages :list ,self_id :int ,exported_a
         elif not media :
             parts .append ('<span class="empty">پیام بدون متن</span>')
         parts .append (f'<span class="time">{html .escape (time_s )}</span></div></div>')
-    parts .append ('<div class="footer">Backup generated by VOLDYSELF</div></div></body></html>')
+    parts .append ('<div class="footer">Backup generated by DARKSELF</div></div></body></html>')
     return "".join (parts )
 
 async def create_chat_backup_file (client ,chat_id ,limit :int =BACKUP_MESSAGE_LIMIT ):
@@ -8310,7 +7108,7 @@ async def ping_controller (client ,message ):
             await asyncio .sleep (0 )
         ping_ms =round ((time .perf_counter ()-t0 )*1000 )
         txt =(
-        "╔═══════ ✦ 𝗩𝗢𝗟𝗗𝗬𝗦𝗘𝗟𝗙 ✦ ═══════╗\n"
+        "╔═══════ ✦ 𝗗𝗔𝗥𝗞𝗦𝗘𝗟𝗙 ✦ ═══════╗\n"
         "              PING\n"
         "╚══════════════════════════════╝\n\n"
         f"◉  `{ping_ms }ms`"
@@ -10027,7 +8825,7 @@ async def _get_private_channel_dialogs (uid :int ,limit :int =30 ):
 
 def _private_channel_home_text (uid :int ,count :int =0 )->str :
     return (
-    "╔══════ ✦ 𝗩𝗢𝗟𝗗𝗬𝗦𝗘𝗟𝗙 ✦ ══════╗\n"
+    "╔══════ ✦ 𝗗𝗔𝗥𝗞𝗦𝗘𝗟𝗙 ✦ ══════╗\n"
     "        سیو کانال خصوصی\n"
     "╚══════════════════════════╝\n\n"
     f"USER `{uid }`\n"
@@ -10048,7 +8846,7 @@ def _private_channel_home_markup_json (uid :int ,channels ):
 
 def _private_channel_count_text (uid :int ,chat_id :int ,title :str )->str :
     return (
-    "╔══════ ✦ 𝗩𝗢𝗟𝗗𝗬𝗦𝗘𝗟𝗙 ✦ ══════╗\n"
+    "╔══════ ✦ 𝗗𝗔𝗥𝗞𝗦𝗘𝗟𝗙 ✦ ══════╗\n"
     "        انتخاب تعداد ذخیره\n"
     "╚══════════════════════════╝\n\n"
     f"کانال: {title }\n\n"
@@ -10316,14 +9114,12 @@ async def source_controller (client ,message ):
     try :
         with open (out ,"w",encoding ="utf-8")as fh :
             fh .write (raw )
-        cap =("╭─────────────────────╮\n"
-        "   ✦ **𝗩𝗢𝗟𝗗𝗬𝗦𝗘𝗟𝗙** ✦\n"
-        "     SOURCE\n"
-        "╰─────────────────────╯\n"
+        cap =("✦ **𝗗𝗔𝗥𝗞𝗦𝗘𝗟𝗙** ✦  ·  SOURCE\n"
+        "━━━━━━━━━━━━━━━━━━\n"
         f"◈ خط      `{lines :,}`\n"
         f"◈ حجم     `{size //1024 :,}` کیلوبایت\n"
         f"◈ تاریخ   `{stamp .replace ('_',' ')}`\n"
-        "┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄\n"
+        "━━━━━━━━━━━━━━━━━━\n"
         "✧ آخرین نسخه، مستقیم از سرور")
         await client .send_document ("me",out ,caption =cap ,file_name =f"darkself_{stamp }.py")
         try :
@@ -10578,7 +9374,7 @@ async def ai_controller (client ,message ):
         return await safe_edit_message (target ,"**هوش مصنوعی جواب نداد، دوباره بزن.**")
     _ai_remember (uid ,chat_id ,question ,answer )
     answer =answer .strip ()
-    head ="╭─────────────────────╮\n   ✦ **𝗩𝗢𝗟𝗗𝗬𝗦𝗘𝗟𝗙** ✦\n     AI\n╰─────────────────────╯\n"
+    head ="✦ **𝗗𝗔𝗥𝗞𝗦𝗘𝗟𝗙** ✦  ·  AI\n━━━━━━━━━━━━━━━━━━\n"
     body =answer if len (answer )<3500 else answer [:3500 ]+" ..."
     await safe_edit_message (target ,head +body )
 
@@ -10695,7 +9491,7 @@ def _fx_pick (data ,item ):
 
 def _fx_card (item ,info ,qty ):
     arrow ="▲"if info ["dt"]=="high"else ("▼"if info ["dt"]=="low"else "•")
-    head ="╭─────────────────────╮\n   ✦ **𝗩𝗢𝗟𝗗𝗬𝗦𝗘𝗟𝗙** ✦\n     LIVE RATE\n╰─────────────────────╯\n"
+    head ="✦ **𝗗𝗔𝗥𝗞𝗦𝗘𝗟𝗙** ✦  ·  LIVE RATE\n──────────────\n"
     body ="◈ **{}**  ·  {}\n".format (item [4 ],item [5 ])
     if info ["toman"]>0 :
         body +="✦ `{}` تومان\n".format (_fx_money (info ["toman"]))
@@ -10709,7 +9505,7 @@ def _fx_card (item ,info ,qty ):
 def _fx_board (data ):
     rows =[("دلار","price_dollar_rl","دلار"),("یورو","price_eur","یورو"),
     ("طلا","geram18","طلای 18"),("سکه","sekee","سکه امامی"),("تتر","crypto-tether-irr","تتر")]
-    out ="╭─────────────────────╮\n   ✦ **𝗩𝗢𝗟𝗗𝗬𝗦𝗘𝗟𝗙** ✦\n     LIVE BOARD\n╰─────────────────────╯\n"
+    out ="✦ **𝗗𝗔𝗥𝗞𝗦𝗘𝗟𝗙** ✦  ·  LIVE BOARD\n──────────────\n"
     stamp =""
     for name ,key ,label in rows :
         row =(data ["tg"]or {}).get (key )or {}
@@ -12935,7 +11731,7 @@ def _pemoji_norm_digit (s ):
 
 def _pemoji_build_list (uid ):
     pmap =_pemoji_map (uid )
-    text ="𝗩𝗢𝗟𝗗𝗬𝗦𝗘𝗟𝗙  ·  PREMIUM EMOJI\n──────────────"
+    text ="𝗗𝗔𝗥𝗞𝗦𝗘𝗟𝗙  ·  PREMIUM EMOJI\n──────────────"
     entities =[]
     for i ,(ch ,doc )in enumerate (pmap .items (),1 ):
         try :
@@ -13982,7 +12778,7 @@ async def _notify_activation_result (uid ,activation_id ,ready ):
     if not ready and data .get ("activation_failure_notified",False ):return 
     if ready :
         prefix ="."if data .get ("settings",{}).get ("dot_commands",False )else ""
-        text =("<b>✦ 𝗩𝗢𝗟𝗗𝗬𝗦𝗘𝗟𝗙 ✦</b>\n"
+        text =("<b>✦ 𝗗𝗔𝗥𝗞𝗦𝗘𝗟𝗙 ✦</b>\n"
         "━━━━━━━━━━━━━━━━━━\n"
         "<b>◈ سلف فعال شد</b>\n\n"
         "اتصال برقرار است و همه‌چیز آماده‌ست.\n"
@@ -13990,7 +12786,7 @@ async def _notify_activation_result (uid ,activation_id ,ready ):
         "━━━━━━━━━━━━━━━━━━\n"
         "✧ خوش اومدی")
     else :
-        text =("<b>✦ 𝗩𝗢𝗟𝗗𝗬𝗦𝗘𝗟𝗙 ✦</b>\n"
+        text =("<b>✦ 𝗗𝗔𝗥𝗞𝗦𝗘𝗟𝗙 ✦</b>\n"
         "━━━━━━━━━━━━━━━━━━\n"
         "<b>◈ اتصال برقرار نشد</b>\n\n"
         "کمی بعد دکمهٔ «فعال‌سازی سلف» را بزن.\n"
@@ -14053,6 +12849,17 @@ async def start_bot_instance (session_string ,phone ,uid ,font ,_retry_count =0 
             logger .warning ("Activation notification failed for %s: %s",uid ,type (exc ).__name__ )
 
 async def _start_bot_instance_now (session_string ,phone ,uid ,font ,_retry_count =0 ):
+    logger .info (f"[activation] start requested for {uid }")
+    try :
+        await _start_bot_instance_now_impl (session_string ,phone ,uid ,font ,_retry_count )
+    except asyncio .CancelledError :
+        raise 
+    except Exception as _e :
+        logger .exception (f"[activation] unhandled error while starting {uid }: {_e }")
+    else :
+        logger .info (f"[activation] finished for {uid }; active={uid in ACTIVE_BOTS }")
+
+async def _start_bot_instance_now_impl (session_string ,phone ,uid ,font ,_retry_count =0 ):
     if not data_manager .data .get ("global_bot_status",True ):
         return 
 
@@ -14115,7 +12922,6 @@ async def _start_bot_instance_now (session_string ,phone ,uid ,font ,_retry_coun
     client .add_handler (MessageHandler (pv_media_lock_handler ,filters .private &~filters .me ),group =-6 )
     client .add_handler (MessageHandler (auto_seen_handler ,filters .private &~filters .me ),group =-4 )
     client .add_handler (MessageHandler (incoming_message_manager ,filters .all &~filters .me ),group =-3 )
-    client .add_handler (MessageHandler (meowie_incoming_handler ,filters .incoming &~filters .me ),group =-4 )
     try :
         client .add_handler (MessageHandler (anti_edit_message_handler ,filters .private &filters .edited &~filters .me ),group =-3 )
     except Exception :
@@ -14132,7 +12938,6 @@ async def _start_bot_instance_now (session_string ,phone ,uid ,font ,_retry_coun
     client .add_handler (MessageHandler (first_comment_controller ,me_cmd (r"^(کامنت|تنظیم متن کامنت اول|لیست کامنت اول|حذف لیست کامنت اول)(?:\s|$)",re .I )),group =0 )
     client .add_handler (MessageHandler (action_panel_controller ,me_cmd (r"^اکشن$",re .I )),group =0 )
     client .add_handler (MessageHandler (filter_words_controller ,me_cmd (r"^(تنظیم فیلتر کلمات|لیست فیلتر کلمات|حذف فیلتر کلمات|حذف لیست فیلتر کلمات)")),group =0 )
-    client .add_handler (MessageHandler (meowie_command_controller ,me_cmd (r"^(?:ماهی|میو|یخچال\s+میویی|میو\s+(?:روشن|خاموش))$")),group =0 )
     client .add_handler (MessageHandler (tabchi_commands_controller ,me_cmd (r"^(بنر\s+پیوی\s+کل|وضعیت\s+تبچی|تنظیم\s+بنر|حذف\s+بنر|تنظیم\s+تایمر|ارسال\s+خودکار|تبچی\s+هوشمند|تنظیم\s+سرعت\s+تبچی)")),group =0 )
     client .add_handler (MessageHandler (bulk_cleanup_controller ,me_cmd (r"^(?:حذف\s+(?:تمام|همه)\s+(?:گروه|کانال|ربات)[\s‌]*ها|توقف\s+پاکسازی)$")),group =0 )
     client .add_handler (MessageHandler (membership_join_controller ,filters .me &filters .private &filters .text &filters .regex (r"^\s*عضو\s*$")),group =0 )
@@ -14181,7 +12986,7 @@ async def _start_bot_instance_now (session_string ,phone ,uid ,font ,_retry_coun
 
     started_ok =False
     try :
-        await asyncio .wait_for (client .start (),timeout =12.0 )
+        await asyncio .wait_for (client .start (),timeout =30.0 )
         tasks =[
         asyncio .create_task (update_profile_clock (client ,uid )),
         asyncio .create_task (anti_login_task (client ,uid )),
@@ -14193,11 +12998,6 @@ async def _start_bot_instance_now (session_string ,phone ,uid ,font ,_retry_coun
         ]
         ACTIVE_BOTS [uid ]=(client ,tasks )
         _load_user_states (uid ,data_manager .get_user_data (uid ))
-        _load_meowie_status (uid )
-        if _meowie_enabled(uid):
-            MEOWIE_TASKS[uid] = asyncio.create_task(meowie_auto_loop(client, uid), name=f"meowie-{uid}")
-            tasks.append(MEOWIE_TASKS[uid])
-            tasks.append(asyncio.create_task(meowie_group_scanner_loop(client, uid), name=f"meowie-scan-{uid}"))
         _report_guard_start_session (uid )
         started_ok =True
         logger .info (f"Instance started for {uid }")
@@ -14215,12 +13015,13 @@ async def _start_bot_instance_now (session_string ,phone ,uid ,font ,_retry_coun
             pass 
         data_manager .delete_session (phone )
     except FloodWait as fw :
-        logger .warning (f"Start FloodWait {fw .value }s for {uid }")
+        _fw_wait =int (getattr (fw ,"value",30 )or 30 )
+        logger .warning (f"Start FloodWait {_fw_wait }s for {uid }")
         if _retry_count >=3 :
             logger .warning (f"Start retry limit reached for {uid }. Giving up.")
             return 
         async def retry_later ():
-            await asyncio .sleep (fw .value +5 )
+            await asyncio .sleep (_fw_wait +5 )
             await start_bot_instance (session_string ,phone ,uid ,font ,_retry_count =_retry_count +1 )
         asyncio .create_task (retry_later ())
     except Exception as e :
@@ -14256,18 +13057,13 @@ async def _start_bot_instance_now (session_string ,phone ,uid ,font ,_retry_coun
                     except Exception :pass
             except Exception :
                 pass
-            task = MEOWIE_TASKS.pop(uid, None)
-            if task and not task.done():
-                task.cancel()
-            MEOWIE_STATUS.pop(uid, None)
-            MEOWIE_RUNTIME.pop(uid, None)
             del client
 
 _PANEL_FLAGS =("CLOCK_STATUS","BIO_CLOCK_STATUS","BIO_DATE_STATUS","AVATAR_STATUS","BOLD_MODE_STATUS",
 "SPOILER_MODE_STATUS","CODE_MODE_STATUS","UNDERLINE_MODE_STATUS","GRADUAL_MODE_STATUS","DOT_COMMANDS_STATUS",
 "PEMOJI_STATUS","TAG_ALERT_STATUS","FILTER_WORDS_ACTIVE","ANTI_DELETE_STATUS","ANTI_EDIT_STATUS",
 "SECRETARY_MODE_STATUS","SELF_DESTRUCT_STATUS","FIRST_COMMENT_STATUS","AUTO_SEEN_STATUS","FORCED_JOIN_ACTIVE",
-"AUTO_SAVE_VIEW_ONCE","TABCHI_PV_STATUS","TABCHI_GP_STATUS","TABCHI_SMART_STATUS","MEOWIE_STATUS","PV_LOCK_STATUS",
+"AUTO_SAVE_VIEW_ONCE","TABCHI_PV_STATUS","TABCHI_GP_STATUS","TABCHI_SMART_STATUS","PV_LOCK_STATUS",
 "ANTI_LOGIN_STATUS","TYPING_MODE_STATUS","PLAYING_MODE_STATUS","RECORD_VOICE_STATUS","UPLOAD_PHOTO_STATUS",
 "WATCH_GIF_STATUS","COPY_MODE_STATUS")
 
@@ -14285,32 +13081,30 @@ def _panel_stats (uid ):
     return on ,max (0 ,total -on )
 
 def _panel_caption (uid ):
-    st ="🟢 آنلاین"if uid in ACTIVE_BOTS else "⚪ آفلاین"
+    st ="◉ آنلاین"if uid in ACTIVE_BOTS else "○ آفلاین"
     try :
         if not data_manager .data .get ("global_bot_status",True ):
-            st ="🔴 خاموش سراسری"
+            st ="✕ خاموش سراسری"
     except Exception :
         pass
     on ,off =_panel_stats (uid )
     return (
-    "╭─────────────────────╮\n"
-    "   ✦ **𝗩𝗢𝗟𝗗𝗬𝗦𝗘𝗟𝗙** ✦\n"
-    "       C O N T R O L\n"
-    "╰─────────────────────╯\n"
-    f"👤 کاربر  ›  `{uid }`\n"
-    f"📡 وضعیت  ›  {st }\n"
-    f"🧩 ماژول  ›  `{on }` روشن   ·   `{off }` خاموش\n"
-    f"📂 بخش    ›  {_panel_tab_label (uid )}\n"
-    "┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄\n"
-    "💡 _تب بالا را عوض کن تا بخش دیگری باز شود_"
+    "✦ **𝗗𝗔𝗥𝗞𝗦𝗘𝗟𝗙** ✦  ·  CONTROL\n"
+    "━━━━━━━━━━━━━━━━━━\n"
+    f"◈ کاربر    `{uid }`\n"
+    f"◈ وضعیت    {st }\n"
+    f"◈ ماژول    `{on }` روشن  ·  `{off }` خاموش\n"
+    f"◈ بخش      {_panel_tab_label (uid )}\n"
+    "━━━━━━━━━━━━━━━━━━\n"
+    "✧ تب بالا را عوض کن تا بخش دیگری باز شود"
     )
 
 PANEL_TAB = {}
 PANEL_COLOR_STATUS = {}
 HELP_COLOR_STATUS = {}
-PANEL_TABS = [("prof", "👤", "پروفایل"), ("text", "📝", "متن"), ("smart", "🧠", "هوشمند"),
-              ("shield", "🛡️", "سپر"), ("pres", "👁️", "حضور"), ("tab", "📢", "تبچی"),
-              ("target", "🎯", "تارگت"), ("lang", "🌐", "ترجمه")]
+PANEL_TABS = [("prof", "❖", "پروفایل"), ("text", "✎", "متن"), ("smart", "⟡", "هوشمند"),
+              ("shield", "☒", "سپر"), ("pres", "◉", "حضور"), ("tab", "◈", "تبچی"),
+              ("target", "♜", "تارگت"), ("lang", "✧", "ترجمه")]
 PANEL_EN = {"prof": "P R O F I L E", "text": "T E X T   E N G I N E", "smart": "S M A R T   S Y S T E M",
             "shield": "P R I V A T E   S H I E L D", "pres": "P R E S E N C E", "tab": "T A B C H I",
             "target": "T A R G E T", "lang": "T R A N S L A T O R"}
@@ -14324,11 +13118,11 @@ def _panel_tab_label (uid ):
     for k, sym, lab in PANEL_TABS:
         if k == cur:
             return f"{sym} {lab}"
-    return "👤 پروفایل"
+    return "❖ پروفایل"
 
 def build_elite_panel_rows (uid ):
     def c (val ):
-        return "🟢"if val else "⚪"
+        return "◉"if val else "○"
 
     preview =stylize_time ("12:34",USER_FONT_CHOICES .get (uid ,'stylized'))
     t_lang =AUTO_TRANSLATE_TARGET .get (uid )
@@ -14595,10 +13389,8 @@ async def _ui_edit_caption (client ,inline_id ,text ,markup_json ,markup ):
         return False
 
 HELP_HOME_TEXT ="""
-╭─────────────────────╮
-   ✦ **𝗩𝗢𝗟𝗗𝗬𝗦𝗘𝗟𝗙** ✦
-     مرکز راهنما
-╰─────────────────────╯
+**𝗗𝗔𝗥𝗞𝗦𝗘𝗟𝗙**  ·  مرکز راهنما
+──────────────────
 
 یک دسته را از منوی زیر انتخاب کنید.
 """.strip ()
@@ -14607,10 +13399,8 @@ HELP_SECTIONS ={
 "main":{
 "title":"دستورات اصلی",
 "text":"""
-╭─────────────────────╮
-   ✦ **𝗩𝗢𝗟𝗗𝗬𝗦𝗘𝗟𝗙** ✦
-     CORE
-╰─────────────────────╯
+✦ **𝗗𝗔𝗥𝗞𝗦𝗘𝗟𝗙** ✦  ·  CORE
+━━━━━━━━━━━━━━━━━━
 
 `پنل`  —  باز کردن پنل کنترل
 `راهنما`  —  نمایش مرکز راهنما
@@ -14624,10 +13414,8 @@ HELP_SECTIONS ={
 "wallet":{
 "title":"کیف پول",
 "text":"""
-╭─────────────────────╮
-   ✦ **𝗩𝗢𝗟𝗗𝗬𝗦𝗘𝗟𝗙** ✦
-     WALLET
-╰─────────────────────╯
+✦ **𝗗𝗔𝗥𝗞𝗦𝗘𝗟𝗙** ✦  ·  WALLET
+━━━━━━━━━━━━━━━━━━
 
 `تنظیم ولت تتر [آدرس]`
 `تنظیم ولت گرام [آدرس]`
@@ -14643,10 +13431,8 @@ HELP_SECTIONS ={
 "backup":{
 "title":"پشتیبان‌گیری",
 "text":"""
-╭─────────────────────╮
-   ✦ **𝗩𝗢𝗟𝗗𝗬𝗦𝗘𝗟𝗙** ✦
-     BACKUP
-╰─────────────────────╯
+✦ **𝗗𝗔𝗥𝗞𝗦𝗘𝗟𝗙** ✦  ·  BACKUP
+━━━━━━━━━━━━━━━━━━
 
 `بکاپ`  —  فایل HTML از ۲۰۰۰ پیام آخر
 `بکاپ کل`  —  ۱۰ چت خصوصی اخیر
@@ -14658,10 +13444,8 @@ HELP_SECTIONS ={
 "datetime":{
 "title":"تاریخ و ساعت",
 "text":"""
-╭─────────────────────╮
-   ✦ **𝗩𝗢𝗟𝗗𝗬𝗦𝗘𝗟𝗙** ✦
-     DATE / TIME
-╰─────────────────────╯
+✦ **𝗗𝗔𝗥𝗞𝗦𝗘𝗟𝗙** ✦  ·  DATE / TIME
+━━━━━━━━━━━━━━━━━━
 
 `ساعت`  —  ساعت تهران و روز هفته
 `تاریخ`  —  شمسی · میلادی · قمری
@@ -14670,10 +13454,8 @@ HELP_SECTIONS ={
 "panel":{
 "title":"پنل کنترل",
 "text":"""
-╭─────────────────────╮
-   ✦ **𝗩𝗢𝗟𝗗𝗬𝗦𝗘𝗟𝗙** ✦
-     PANEL
-╰─────────────────────╯
+✦ **𝗗𝗔𝗥𝗞𝗦𝗘𝗟𝗙** ✦  ·  PANEL
+━━━━━━━━━━━━━━━━━━
 
 `پنل`  —  مرکز کنترل دکمه‌ای
 
@@ -14689,10 +13471,8 @@ HELP_SECTIONS ={
 "group":{
 "title":"مدیریت گروه",
 "text":"""
-╭─────────────────────╮
-   ✦ **𝗩𝗢𝗟𝗗𝗬𝗦𝗘𝗟𝗙** ✦
-     GROUP
-╰─────────────────────╯
+✦ **𝗗𝗔𝗥𝗞𝗦𝗘𝗟𝗙** ✦  ·  GROUP
+━━━━━━━━━━━━━━━━━━
 
 `تگ`  —  تگ اعضای دارای یوزرنیم
 `تگ ادمین ها`  —  تگ مدیران گروه
@@ -14707,10 +13487,8 @@ HELP_SECTIONS ={
 "reply":{
 "title":"ابزار ریپلای",
 "text":"""
-╭─────────────────────╮
-   ✦ **𝗩𝗢𝗟𝗗𝗬𝗦𝗘𝗟𝗙** ✦
-     REPLY
-╰─────────────────────╯
+✦ **𝗗𝗔𝗥𝗞𝗦𝗘𝗟𝗙** ✦  ·  REPLY
+━━━━━━━━━━━━━━━━━━
 
 `دانلود`  —  دانلود مدیا به ذخیره‌شده‌ها
 `ذخیره`  —  ذخیره متن یا مدیا
@@ -14725,10 +13503,8 @@ HELP_SECTIONS ={
 "react":{
 "title":"ری‌اکشن",
 "text":"""
-╭─────────────────────╮
-   ✦ **𝗩𝗢𝗟𝗗𝗬𝗦𝗘𝗟𝗙** ✦
-     REACTION
-╰─────────────────────╯
+✦ **𝗗𝗔𝗥𝗞𝗦𝗘𝗟𝗙** ✦  ·  REACTION
+━━━━━━━━━━━━━━━━━━
 
 `ریاکت [ایموجی]`  —  ثبت ری‌اکشن خودکار
 `حذف ریاکت`  —  حذف ری‌اکشن کاربر
@@ -14739,10 +13515,8 @@ HELP_SECTIONS ={
 "profile":{
 "title":"پروفایل",
 "text":"""
-╭─────────────────────╮
-   ✦ **𝗩𝗢𝗟𝗗𝗬𝗦𝗘𝗟𝗙** ✦
-     PROFILE
-╰─────────────────────╯
+✦ **𝗗𝗔𝗥𝗞𝗦𝗘𝗟𝗙** ✦  ·  PROFILE
+━━━━━━━━━━━━━━━━━━
 
 `تنظیم نام اکانت [نام]`
 `تنظیم نام خانوادگی [نام]`
@@ -14758,10 +13532,8 @@ HELP_SECTIONS ={
 "create":{
 "title":"ساخت و حذف",
 "text":"""
-╭─────────────────────╮
-   ✦ **𝗩𝗢𝗟𝗗𝗬𝗦𝗘𝗟𝗙** ✦
-     CREATE
-╰─────────────────────╯
+✦ **𝗗𝗔𝗥𝗞𝗦𝗘𝗟𝗙** ✦  ·  CREATE
+━━━━━━━━━━━━━━━━━━
 
 `ساخت گروه [اسم]`
 `ساخت کانال [اسم]`
@@ -14779,10 +13551,8 @@ HELP_SECTIONS ={
 "lists":{
 "title":"لیست‌ها",
 "text":"""
-╭─────────────────────╮
-   ✦ **𝗩𝗢𝗟𝗗𝗬𝗦𝗘𝗟𝗙** ✦
-     LISTS
-╰─────────────────────╯
+✦ **𝗗𝗔𝗥𝗞𝗦𝗘𝗟𝗙** ✦  ·  LISTS
+━━━━━━━━━━━━━━━━━━
 
 **افزودن/حذف تارگت** (با ریپلای روی پیام کاربر)
 `تنظیم دشمن`  ·  `حذف دشمن`
@@ -14812,10 +13582,8 @@ HELP_SECTIONS ={
 "wordfilter":{
 "title":"فیلتر کلمات",
 "text":"""
-╭─────────────────────╮
-   ✦ **𝗩𝗢𝗟𝗗𝗬𝗦𝗘𝗟𝗙** ✦
-     WORD FILTER
-╰─────────────────────╯
+✦ **𝗗𝗔𝗥𝗞𝗦𝗘𝗟𝗙** ✦  ·  WORD FILTER
+━━━━━━━━━━━━━━━━━━
 
 `تنظیم فیلتر کلمات [متن]`
 `لیست فیلتر کلمات`
@@ -14827,10 +13595,8 @@ HELP_SECTIONS ={
 "secretary":{
 "title":"منشی خودکار",
 "text":"""
-╭─────────────────────╮
-   ✦ **𝗩𝗢𝗟𝗗𝗬𝗦𝗘𝗟𝗙** ✦
-     SECRETARY
-╰─────────────────────╯
+✦ **𝗗𝗔𝗥𝗞𝗦𝗘𝗟𝗙** ✦  ·  SECRETARY
+━━━━━━━━━━━━━━━━━━
 
 `تنظیم منشی [متن]`  —  پاسخ خودکار ثابت
 
@@ -14839,10 +13605,8 @@ HELP_SECTIONS ={
 "fjoin":{
 "title":"عضویت اجباری",
 "text":"""
-╭─────────────────────╮
-   ✦ **𝗩𝗢𝗟𝗗𝗬𝗦𝗘𝗟𝗙** ✦
-     FORCED JOIN
-╰─────────────────────╯
+✦ **𝗗𝗔𝗥𝗞𝗦𝗘𝗟𝗙** ✦  ·  FORCED JOIN
+━━━━━━━━━━━━━━━━━━
 
 `تنظیم عضویت اجباری @username`
 `حذف عضویت اجباری @username`
@@ -14852,10 +13616,8 @@ HELP_SECTIONS ={
 "privatechan":{
 "title":"سیو کانال خصوصی",
 "text":"""
-╭─────────────────────╮
-   ✦ **𝗩𝗢𝗟𝗗𝗬𝗦𝗘𝗟𝗙** ✦
-     PRIVATE CHANNEL SAVE
-╰─────────────────────╯
+✦ **𝗗𝗔𝗥𝗞𝗦𝗘𝗟𝗙** ✦  ·  PRIVATE CHANNEL SAVE
+━━━━━━━━━━━━━━━━━━
 
 `سیو کانال خصوصی`
 
@@ -14864,10 +13626,8 @@ HELP_SECTIONS ={
 "media":{
 "title":"رسانه و جستجو",
 "text":"""
-╭─────────────────────╮
-   ✦ **𝗩𝗢𝗟𝗗𝗬𝗦𝗘𝗟𝗙** ✦
-     MEDIA
-╰─────────────────────╯
+✦ **𝗗𝗔𝗥𝗞𝗦𝗘𝗟𝗙** ✦  ·  MEDIA
+━━━━━━━━━━━━━━━━━━
 
 `عکس [متن]`  —  جستجو و ارسال تصویر
 `سرچ [موضوع]`  —  جستجو و خلاصه متنی
@@ -14879,10 +13639,8 @@ HELP_SECTIONS ={
 "cheat":{
 "title":"بازی و سرگرمی",
 "text":"""
-╭─────────────────────╮
-   ✦ **𝗩𝗢𝗟𝗗𝗬𝗦𝗘𝗟𝗙** ✦
-     GAME
-╰─────────────────────╯
+✦ **𝗗𝗔𝗥𝗞𝗦𝗘𝗟𝗙** ✦  ·  GAME
+━━━━━━━━━━━━━━━━━━
 
 `تاس [1-6]`  —  تاس تا رسیدن به عدد
 `دارت`
@@ -14895,10 +13653,8 @@ HELP_SECTIONS ={
 "fun":{
 "title":"فان و افکت",
 "text":"""
-╭─────────────────────╮
-   ✦ **𝗩𝗢𝗟𝗗𝗬𝗦𝗘𝗟𝗙** ✦
-     FUN
-╰─────────────────────╯
+✦ **𝗗𝗔𝗥𝗞𝗦𝗘𝗟𝗙** ✦  ·  FUN
+━━━━━━━━━━━━━━━━━━
 
 `قلب`  —  لودینگ قلبی ۰ تا ۱۰۰
 `ماتریکس`  —  افکت بارش کد
@@ -14908,10 +13664,8 @@ HELP_SECTIONS ={
 "security":{
 "title":"امنیت پیوی",
 "text":"""
-╭─────────────────────╮
-   ✦ **𝗩𝗢𝗟𝗗𝗬𝗦𝗘𝗟𝗙** ✦
-     SECURITY
-╰─────────────────────╯
+✦ **𝗗𝗔𝗥𝗞𝗦𝗘𝗟𝗙** ✦  ·  SECURITY
+━━━━━━━━━━━━━━━━━━
 
 **ضد دیلیت**  ذخیرهٔ پیام حذف‌شده
 **ضد ادیت**  ثبت نسخهٔ قبلی پیام
@@ -14922,10 +13676,8 @@ HELP_SECTIONS ={
 "crypto":{
 "title":"رمزنگاری",
 "text":"""
-╭─────────────────────╮
-   ✦ **𝗩𝗢𝗟𝗗𝗬𝗦𝗘𝗟𝗙** ✦
-     CRYPTO
-╰─────────────────────╯
+✦ **𝗗𝗔𝗥𝗞𝗦𝗘𝗟𝗙** ✦  ·  CRYPTO
+━━━━━━━━━━━━━━━━━━
 
 `رمز [متن]`  —  رمزنگاری متن
 `رمز`  —  رمزنگاری پیام ریپلای‌شده
@@ -14936,10 +13688,8 @@ HELP_SECTIONS ={
 "timed":{
 "title":"ابزار زمان‌دار",
 "text":"""
-╭─────────────────────╮
-   ✦ **𝗩𝗢𝗟𝗗𝗬𝗦𝗘𝗟𝗙** ✦
-     TIMED
-╰─────────────────────╯
+✦ **𝗗𝗔𝗥𝗞𝗦𝗘𝗟𝗙** ✦  ·  TIMED
+━━━━━━━━━━━━━━━━━━
 
 `پاک شونده [زمان]`  —  حذف پیام پس از زمان
 `ارسال [زمان] بعد [متن]`  —  ارسال زمان‌دار
@@ -14952,10 +13702,8 @@ HELP_SECTIONS ={
 "firstcomment":{
 "title":"کامنت اول",
 "text":"""
-╭─────────────────────╮
-   ✦ **𝗩𝗢𝗟𝗗𝗬𝗦𝗘𝗟𝗙** ✦
-     FIRST COMMENT
-╰─────────────────────╯
+✦ **𝗗𝗔𝗥𝗞𝗦𝗘𝗟𝗙** ✦  ·  FIRST COMMENT
+━━━━━━━━━━━━━━━━━━
 
 `تنظیم متن کامنت اول [متن]`
 `کامنت`  —  فعال‌سازی در گروه دیسکاشن
@@ -14967,10 +13715,8 @@ HELP_SECTIONS ={
 "nsfw":{
 "title":"+۱۸",
 "text":"""
-╭─────────────────────╮
-   ✦ **𝗩𝗢𝗟𝗗𝗬𝗦𝗘𝗟𝗙** ✦
-     NSFW
-╰─────────────────────╯
+✦ **𝗗𝗔𝗥𝗞𝗦𝗘𝗟𝗙** ✦  ·  NSFW
+━━━━━━━━━━━━━━━━━━
 
 `boob`  ·  `butt`  —  تصویر
 `lewd`  —  گیف
@@ -14980,10 +13726,8 @@ HELP_SECTIONS ={
 "cleanexit":{
 "title":"پاکسازی و خروج",
 "text":"""
-╭─────────────────────╮
-   ✦ **𝗩𝗢𝗟𝗗𝗬𝗦𝗘𝗟𝗙** ✦
-     CLEAN EXIT
-╰─────────────────────╯
+✦ **𝗗𝗔𝗥𝗞𝗦𝗘𝗟𝗙** ✦  ·  CLEAN EXIT
+━━━━━━━━━━━━━━━━━━
 
 `ترک`  —  در گروه: حذف پیام‌های خودت و خروج؛ در پیوی: پاکسازی دوطرفه
 `ترک گروه`  —  حذف پیام‌های خودت در گروه و خروج
@@ -14996,10 +13740,8 @@ HELP_SECTIONS ={
 "tabchi":{
 "title":"تبچی و تبلیغات",
 "text":"""
-╭─────────────────────╮
-   ✦ **𝗩𝗢𝗟𝗗𝗬𝗦𝗘𝗟𝗙** ✦
-     TABCHI
-╰─────────────────────╯
+✦ **𝗗𝗔𝗥𝗞𝗦𝗘𝗟𝗙** ✦  ·  TABCHI
+━━━━━━━━━━━━━━━━━━
 
 `وضعیت تبچی`  —  نمایش وضعیت بنر، تایمر و ارسال‌ها
 `تنظیم بنر [متن]`  —  تنظیم بنر متنی (یا ریپلای روی رسانه)
@@ -15015,10 +13757,8 @@ HELP_SECTIONS ={
 "pemoji":{
 "title":"ایموجی پرمیوم",
 "text":"""
-╭─────────────────────╮
-   ✦ **𝗩𝗢𝗟𝗗𝗬𝗦𝗘𝗟𝗙** ✦
-     PREMIUM EMOJI
-╰─────────────────────╯
+✦ **𝗗𝗔𝗥𝗞𝗦𝗘𝗟𝗙** ✦  ·  PREMIUM EMOJI
+━━━━━━━━━━━━━━━━━━
 
 `تنظیم ایموجی ❤️`  —  ریپلای روی ایموجی پرمیوم؛ تنظیم قبلی جایگزین می‌شه
 `تنظیم ایموجی ❤️ لینک پک`  —  صفحه‌ی انتخاب؛ ریپلای عدد روی همون پیام
@@ -15031,10 +13771,8 @@ HELP_SECTIONS ={
 "logo":{
 "title":"لوگو",
 "text":"""
-╭─────────────────────╮
-   ✦ **𝗩𝗢𝗟𝗗𝗬𝗦𝗘𝗟𝗙** ✦
-     LOGO STUDIO
-╰─────────────────────╯
+✦ **𝗗𝗔𝗥𝗞𝗦𝗘𝗟𝗙** ✦  ·  LOGO STUDIO
+━━━━━━━━━━━━━━━━━━
 
 `لوگو amir 10`  —  ساخت لوگو با طرح شماره 10
 `لوگو amir`  —  طرح تصادفی
@@ -15045,10 +13783,8 @@ HELP_SECTIONS ={
 "rate":{
 "title":"نرخ ارز",
 "text":"""
-╭─────────────────────╮
-   ✦ **𝗩𝗢𝗟𝗗𝗬𝗦𝗘𝗟𝗙** ✦
-     LIVE RATE
-╰─────────────────────╯
+✦ **𝗗𝗔𝗥𝗞𝗦𝗘𝗟𝗙** ✦  ·  LIVE RATE
+━━━━━━━━━━━━━━━━━━
 
 `نرخ`  —  تابلو زنده دلار، یورو، طلا، سکه، تتر
 `دلار`  —  قیمت لحظه‌ای یک دلار به تومان
@@ -15061,10 +13797,8 @@ HELP_SECTIONS ={
 "ai":{
 "title":"هوش مصنوعی",
 "text":"""
-╭─────────────────────╮
-   ✦ **𝗩𝗢𝗟𝗗𝗬𝗦𝗘𝗟𝗙** ✦
-     AI CHAT
-╰─────────────────────╯
+✦ **𝗗𝗔𝗥𝗞𝗦𝗘𝗟𝗙** ✦  ·  AI CHAT
+━━━━━━━━━━━━━━━━━━
 
 `هوش پایتخت ژاپن کجاست`  —  پرسیدن سوال
 `هوش` روی پیام ریپلای  —  جواب درباره همان متن
@@ -15078,10 +13812,8 @@ HELP_SECTIONS ={
 "music":{
 "title":"آهنگ",
 "text":"""
-╭─────────────────────╮
-   ✦ **𝗩𝗢𝗟𝗗𝗬𝗦𝗘𝗟𝗙** ✦
-     MUSIC FINDER
-╰─────────────────────╯
+✦ **𝗗𝗔𝗥𝗞𝗦𝗘𝗟𝗙** ✦  ·  MUSIC FINDER
+━━━━━━━━━━━━━━━━━━
 
 `آهنگ گوزن سورنا`  —  پیدا کردن و فرستادن فایل آهنگ
 `آهنگ Blinding Lights`  —  فارسی و خارجی
@@ -15091,10 +13823,8 @@ HELP_SECTIONS ={
 "avatar":{
 "title":"آواتار",
 "text":"""
-╭─────────────────────╮
-   ✦ **𝗩𝗢𝗟𝗗𝗬𝗦𝗘𝗟𝗙** ✦
-     LIVE AVATAR
-╰─────────────────────╯
+✦ **𝗗𝗔𝗥𝗞𝗦𝗘𝗟𝗙** ✦  ·  LIVE AVATAR
+━━━━━━━━━━━━━━━━━━
 
 `آواتار`  —  پیش‌نمایش بدون تغییر پروفایل
 `آواتار طرح 3`  —  انتخاب طرح 1 تا 8
@@ -15106,28 +13836,28 @@ HELP_SECTIONS ={
 }
 
 HELP_BUTTON_GROUPS =[
-("⚙️","دستورات پایه",[
+("✦","دستورات پایه",[
 ("اصلی","main"),("پنل کنترل","panel"),("تاریخ و ساعت","datetime"),
 ]),
-("👥","مدیریت گروه",[
+("♜","مدیریت گروه",[
 ("گروه","group"),("ریپلای","reply"),("ری‌اکشن","react"),("پاکسازی خروج","cleanexit"),
 ]),
-("🛡️","امنیت و حریم خصوصی",[
+("☒","امنیت و حریم خصوصی",[
 ("امنیت پیوی","security"),("رمزنگاری","crypto"),("فیلتر کلمات","wordfilter"),
 ]),
-("🎨","شخصی‌سازی",[
+("❖","شخصی‌سازی",[
 ("پروفایل","profile"),("ساخت / حذف","create"),("لیست‌ها","lists"),
 ]),
-("🤖","خودکارسازی",[
+("⟡","خودکارسازی",[
 ("منشی","secretary"),("زمان‌دار","timed"),("کامنت اول","firstcomment"),("تبچی","tabchi"),
 ]),
-("🧰","متفرقه",[
+("◈","متفرقه",[
 ("رسانه","media"),("سیو کانال","privatechan"),("کیف پول","wallet"),("بکاپ","backup"),("ایموجی پرمیوم","pemoji"),("لوگو","logo"),("آواتار","avatar"),("آهنگ","music"),("نرخ ارز","rate"),("هوش مصنوعی","ai"),
 ]),
-("🎮","سرگرمی",[
+("♆","سرگرمی",[
 ("بازی","cheat"),("فان","fun"),("عضویت اجباری","fjoin"),
 ]),
-("🔞","محتوای بزرگسال",[
+("✧","محتوای بزرگسال",[
 ("+۱۸","nsfw"),
 ]),
 ]
@@ -15162,7 +13892,7 @@ def get_help_group_text (gi ):
     except Exception :
         return HELP_HOME_TEXT
     names =" · ".join (lb for lb ,_k in items )
-    return (f"**𝗩𝗢𝗟𝗗𝗬𝗦𝗘𝗟𝗙**  ·  {title }\n"
+    return (f"**𝗗𝗔𝗥𝗞𝗦𝗘𝗟𝗙**  ·  {title }\n"
     "──────────────────\n\n"
     f"{sym } {len (items )} بخش\n"
     f"{names }\n\n"
@@ -15310,7 +14040,7 @@ async def inline_panel_handler (client ,query ):
 
         panel_text =_panel_caption (target_uid )
 
-        _res_item ={"type":"article","id":str (uuid .uuid4 ()),"title":"VOLDYSELF PANEL",
+        _res_item ={"type":"article","id":str (uuid .uuid4 ()),"title":"DARKSELF PANEL",
         "input_message_content":{"message_text":panel_text ,"parse_mode":"Markdown"},
         "reply_markup":generate_panel_markup_json (target_uid )}
         res =await bot_api_request ("answerInlineQuery",{
@@ -15324,7 +14054,7 @@ async def inline_panel_handler (client ,query ):
 
         result =InlineQueryResultArticle (
         id =str (uuid .uuid4 ()),
-        title ="VOLDYSELF PANEL",
+        title ="DARKSELF PANEL",
         input_message_content =InputTextMessageContent (panel_text ),
         reply_markup =generate_panel_markup (target_uid )
         )
@@ -15340,7 +14070,7 @@ async def inline_panel_handler (client ,query ):
             if uid ==ROOT_ADMIN :
                 target_uid =requested_uid 
 
-        _hitem ={"type":"article","id":str (uuid .uuid4 ()),"title":"VOLDYSELF COMMAND CENTER",
+        _hitem ={"type":"article","id":str (uuid .uuid4 ()),"title":"DARKSELF COMMAND CENTER",
         "description":"Professional inline command guide",
         "input_message_content":{"message_text":HELP_HOME_TEXT ,"parse_mode":"Markdown"},
         "reply_markup":generate_help_home_markup_json (target_uid )}
@@ -15355,7 +14085,7 @@ async def inline_panel_handler (client ,query ):
 
         result =InlineQueryResultArticle (
         id =str (uuid .uuid4 ()),
-        title ="VOLDYSELF COMMAND CENTER",
+        title ="DARKSELF COMMAND CENTER",
         input_message_content =InputTextMessageContent (HELP_HOME_TEXT ),
         reply_markup =generate_help_home_markup (target_uid )
         )
@@ -15415,7 +14145,7 @@ async def inline_panel_handler (client ,query ):
                     return await query .answer ([],cache_time =0 ,is_personal =True )
                 result =InlineQueryResultArticle (
                 id =str (uuid .uuid4 ()),
-                title ="VOLDYSELF ACTION PANEL",
+                title ="DARKSELF ACTION PANEL",
                 description ="Quick target actions",
                 input_message_content =InputTextMessageContent (build_action_panel_text (owner_uid ,chat_id ,target_id )),
                 reply_markup =build_action_panel_markup (owner_uid ,chat_id ,target_id )
@@ -15452,6 +14182,8 @@ async def inline_panel_handler (client ,query ):
 
 @manager_bot .on_callback_query ()
 async def callback_panel_handler (client ,callback ):
+    if (callback .data or "").startswith ("mm:"):
+        return await main_menu_callback (client ,callback )
     if (callback .data or "").startswith ("pemopg:"):
         return await pemoji_pick_callback (client ,callback )
     if (callback .data or "")=="pemnoop":
@@ -16596,7 +15328,7 @@ async def admin_deploy_handler (client ,message ):
     cap =" ".join ((getattr (message ,"caption",None )or "").split ()).lower ()
     if cap not in [w .lower ()for w in DEPLOY_WORDS ]:
         await message .reply_text (
-        "✦ <b>𝗩𝗢𝗟𝗗𝗬𝗦𝗘𝗟𝗙</b> ✦  ·  DEPLOY\n"
+        "✦ <b>𝗗𝗔𝗥𝗞𝗦𝗘𝗟𝗙</b> ✦  ·  DEPLOY\n"
         "━━━━━━━━━━━━━━━━━━\n"
         "برای جایگزینی کد، همین فایل را با کپشن <code>آپدیت</code> بفرست.",
         parse_mode =ParseMode .HTML )
@@ -16630,7 +15362,7 @@ async def admin_deploy_handler (client ,message ):
         except Exception :
             pass
         await note .edit_text (
-        "✦ <b>𝗩𝗢𝗟𝗗𝗬𝗦𝗘𝗟𝗙</b> ✦  ·  DEPLOY\n"
+        "✦ <b>𝗗𝗔𝗥𝗞𝗦𝗘𝗟𝗙</b> ✦  ·  DEPLOY\n"
         "━━━━━━━━━━━━━━━━━━\n"
         "<b>◈ کد ایراد دارد، جایگزین نشد</b>\n\n"
         f"<code>{html .escape (err )}</code>\n"
@@ -16673,7 +15405,7 @@ async def admin_deploy_handler (client ,message ):
     except Exception as exc :
         logger .warning ("deploy guard write failed: %s",type (exc ).__name__ )
     await note .edit_text (
-    "✦ <b>𝗩𝗢𝗟𝗗𝗬𝗦𝗘𝗟𝗙</b> ✦  ·  DEPLOY\n"
+    "✦ <b>𝗗𝗔𝗥𝗞𝗦𝗘𝗟𝗙</b> ✦  ·  DEPLOY\n"
     "━━━━━━━━━━━━━━━━━━\n"
     "<b>◈ کد جایگزین شد</b>\n\n"
     f"◈ خط      <code>{lines :,}</code>\n"
@@ -16708,7 +15440,7 @@ async def admin_source_handler (client ,message ):
     try :
         with open (out ,"w",encoding ="utf-8")as fh :
             fh .write (raw )
-        cap =("✦ <b>𝗩𝗢𝗟𝗗𝗬𝗦𝗘𝗟𝗙</b> ✦  ·  SOURCE\n"
+        cap =("✦ <b>𝗗𝗔𝗥𝗞𝗦𝗘𝗟𝗙</b> ✦  ·  SOURCE\n"
         "━━━━━━━━━━━━━━━━━━\n"
         f"◈ خط      <code>{lines :,}</code>\n"
         f"◈ حجم     <code>{size //1024 :,}</code> کیلوبایت\n"
@@ -16904,15 +15636,139 @@ def self_capacity_full_text ():
     "بعداً دوباره /start رو بزن و امتحان کن."
     )
 
+# ======================= Main menu (پنل اصلی) =======================
+MENU_MINIAPP_URL = os.environ.get("MINIAPP_URL", "https://mashaiiiooob-bot.github.io/Myself-/miniapp/")
+MENU_CHANNEL_URL = os.environ.get("CHANNEL_URL", "").strip()
+MENU_SUPPORT_URL = os.environ.get("SUPPORT_URL", "").strip()
+_MENU_PHOTO_FILE_ID = None
+_MENU_CAPTION = "<b>⚡ پنل اصلی VOLDYSELF</b>\n\nیکی از گزینه‌های زیر را انتخاب کن 👇"
+_MENU_IMG_B64 = "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"
+
+class _MenuMsg:
+    """Adapter so start_handler can be re-used from a button press."""
+    def __init__(self, client, user, chat_id, text):
+        self._c, self.from_user, self.text = client, user, text
+        self.chat = type("C", (), {"id": chat_id})()
+        self.chat_id = chat_id
+    async def reply_text(self, text, **kw):
+        return await self._c.send_message(self.chat_id, text, **kw)
+
+def _menu_buttons(styled=True):
+    def b(text, style, **kw):
+        d = {"text": text, **kw}
+        if styled:
+            d["style"] = style
+        return d
+    rows = [
+        [b("🤖 مدیریت سلف", "success", callback_data="mm:self")],
+        [b("📖 راهنما", "primary", callback_data="mm:help"), b("👤 حساب کاربری", "primary", callback_data="mm:acct")],
+    ]
+    if styled and MENU_MINIAPP_URL.startswith("https://"):
+        rows.append([b("🚀 مینی‌اپ سلف", "success", web_app={"url": MENU_MINIAPP_URL})])
+    links = []
+    if MENU_CHANNEL_URL.startswith("http"):
+        links.append(b("📣 کانال", "danger", url=MENU_CHANNEL_URL))
+    if MENU_SUPPORT_URL.startswith("http"):
+        links.append(b("💬 پشتیبانی", "danger", url=MENU_SUPPORT_URL))
+    if links:
+        rows.append(links)
+    rows.append([b("❓ سلف چیه؟", "danger", callback_data="mm:about")])
+    return rows
+
+async def send_main_menu(chat_id):
+    """Photo + coloured inline buttons via the Bot API. Falls back to a plain Pyrogram menu."""
+    global _MENU_PHOTO_FILE_ID
+    try:
+        img = base64.b64decode(_MENU_IMG_B64)
+        url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendPhoto"
+        markup = json.dumps({"inline_keyboard": _menu_buttons(True)}, ensure_ascii=False)
+        async with aiohttp.ClientSession() as sess:
+            for _ in range(2):
+                form = aiohttp.FormData()
+                form.add_field("chat_id", str(chat_id))
+                form.add_field("caption", _MENU_CAPTION)
+                form.add_field("parse_mode", "HTML")
+                form.add_field("reply_markup", markup)
+                if _MENU_PHOTO_FILE_ID:
+                    form.add_field("photo", _MENU_PHOTO_FILE_ID)
+                else:
+                    form.add_field("photo", img, filename="menu.jpg", content_type="image/jpeg")
+                async with sess.post(url, data=form, timeout=aiohttp.ClientTimeout(total=25)) as r:
+                    j = await r.json(content_type=None)
+                if j.get("ok"):
+                    try:
+                        _MENU_PHOTO_FILE_ID = j["result"]["photo"][-1]["file_id"]
+                    except Exception:
+                        pass
+                    return True
+                if _MENU_PHOTO_FILE_ID:
+                    _MENU_PHOTO_FILE_ID = None   # stale file_id -> re-upload once
+                    continue
+                logger.warning(f"main menu sendPhoto failed: {str(j)[:200]}")
+                break
+    except Exception as e:
+        logger.warning(f"main menu Bot API error: {e}")
+    try:   # fallback without button colours / web_app
+        rows = [[InlineKeyboardButton(x["text"], callback_data=x.get("callback_data"), url=x.get("url")) for x in row] for row in _menu_buttons(False)]
+        bio = io.BytesIO(base64.b64decode(_MENU_IMG_B64)); bio.name = "menu.jpg"
+        await manager_bot.send_photo(chat_id, bio, caption=re.sub(r"</?b>", "**", _MENU_CAPTION), reply_markup=InlineKeyboardMarkup(rows))
+        return True
+    except Exception as e:
+        logger.warning(f"main menu fallback failed: {e}")
+        return False
+
+async def main_menu_callback(client, callback):
+    act = (callback.data or "").split(":", 1)[-1]
+    user = callback.from_user
+    chat_id = callback.message.chat.id if callback.message else user.id
+    try:
+        await callback.answer()
+    except Exception:
+        pass
+    if act == "self":
+        return await start_handler(client, _MenuMsg(client, user, chat_id, "فعال‌سازی سلف"))
+    if act == "help":
+        txt = ("📖 **راهنمای سریع**\n\n"
+               "بعد از فعال‌سازی، این دستورها را در تلگرام خودت بنویس:\n"
+               "• `پنل` — پنل کنترل سلف\n• `راهنما` — مرکز راهنمای کامل\n• `ping` — تست سرعت\n"
+               "• `ساعت` / `تاریخ` — زمان و تاریخ\n• `ترجمه` — ریپلای روی یک پیام\n• `هوش سوال` — هوش مصنوعی\n• `نرخ` — نرخ ارز و طلا\n\n"
+               "همه‌ی دستورها در مینی‌اپ هم هست 🚀")
+        return await client.send_message(chat_id, txt)
+    if act == "acct":
+        ud = data_manager.data.get("users", {}).get(str(user.id), {})
+        phone = str(ud.get("phone") or "")
+        phone_txt = ("•••• " + phone[-4:]) if len(phone) >= 4 else "ثبت نشده"
+        if user.id in ACTIVE_BOTS:
+            st = "🟢 فعال و متصل"
+        elif ud.get("session_string"):
+            st = "🟡 ثبت‌شده، در حال اتصال یا غیرفعال"
+        else:
+            st = "🔴 فعال نشده"
+        return await client.send_message(chat_id, f"👤 **حساب کاربری**\n\n🆔 آیدی: `{user.id}`\n📱 شماره: {phone_txt}\n⚙️ وضعیت سلف: {st}")
+    if act == "about":
+        return await client.send_message(chat_id, "❓ **سلف چیه؟**\n\nسلف یک دستیار هوشمند روی حساب تلگرام خودته: ابزارهای گروه، ترجمه، جستجو، هوش مصنوعی، آمار، ساعت و پروفایل و ده‌ها قابلیت دیگر، فقط با نوشتن چند کلمه.\n\nبرای شروع «🤖 مدیریت سلف» را بزن.")
+
+@manager_bot.on_message(filters.private & (filters.command(["panel", "help", "menu"]) | filters.regex(r"^(پنل|راهنما|منو)$")), group=-15)
+async def menu_cmd_handler(client, message):
+    if not message.from_user:
+        return
+    await send_main_menu(message.chat.id)
+    message.stop_propagation()
+# =====================================================================
+
 @manager_bot .on_message ((filters .command ("start")|filters .regex ("فعال‌سازی سلف"))&filters .private )
 async def start_handler (client ,message ):
     if not message .from_user :return 
     uid =message .from_user .id
+    if (message .text or "").startswith ("/start"):
+        _menu_ok =await send_main_menu (message .chat .id )
+        if _menu_ok and uid not in data_manager .get_admins ():
+            return 
 
     if uid in data_manager .get_admins ()and (message .text =="/start"or message .text =="فعال‌سازی سلف"):
         kb =get_admin_menu_keyboard (uid )
         if message .text =="/start":
-            return await message .reply_text ("**خوش اومدی به پنل مدیریت VOLDYSELF.**",reply_markup =kb )
+            return await message .reply_text ("**خوش اومدی به پنل مدیریت DARKSELF.**",reply_markup =kb )
 
     if not data_manager .data .get ("global_bot_status",True ):
         return await message .reply_text ("**سلف‌ها موقتاً توسط مدیریت خاموش شدن.** لطفاً صبر کن.")
@@ -17260,37 +16116,6 @@ async def text_handler (client ,message ):
             await asyncio .wait_for (user_c .sign_in (st ['phone'],st ['hash'],re .sub (r"\D+","",message .text )),timeout =20.0 )
             await finalize_login (message ,user_c ,st ['phone'])
         except SessionPasswordNeeded :
-            # Reuse the encrypted 2FA credential if this account has one saved.
-            saved_uid =st .get ("user_id")
-            if not saved_uid :
-                try :
-                    wanted_phone =str (st .get ("phone") or "").strip ()
-                    for _uid ,_ud in data_manager .data .get ("users",{}).items ():
-                        if str (_ud .get ("phone") or "").strip ()==wanted_phone:
-                            saved_uid =int (_uid )
-                            break
-                except Exception :
-                    saved_uid =None
-            saved_password =""
-            if saved_uid :
-                try :
-                    saved_password =_db_decrypt (data_manager .get_user_data (int (saved_uid)).get ("settings",{}).get ("twofa_password","")).strip ()
-                except Exception :
-                    saved_password =""
-            if saved_password :
-                try :
-                    await asyncio .wait_for (user_c .check_password (saved_password ),timeout =20.0 )
-                    await finalize_login (message ,user_c ,st ['phone'])
-                    return
-                except Exception :
-                    # Invalid/stale credential: clear it and fall back to manual entry.
-                    try :
-                        if saved_uid :
-                            data_manager .get_user_data (int (saved_uid)).setdefault ("settings",{})["twofa_password"]=""
-                            data_manager .save_data ()
-                            data_manager .force_save_sync ()
-                    except Exception :
-                        pass
             st ['step']='password'
             await message .reply_text ("**رمز دو مرحله‌ای را وارد کنید:**")
         except Exception as e :
@@ -17304,23 +16129,8 @@ async def text_handler (client ,message ):
 
     elif st ['step']=='password':
         if not message .text :return await message .reply_text ("**رمز را به صورت متنی ارسال کنید.**")
-        password =message .text .strip ()
         try :
-            await asyncio .wait_for (user_c .check_password (password ),timeout =20.0 )
-            # Store the 2FA password encrypted in the database so a later login
-            # can reuse it without asking the user again. Never store plaintext.
-            uid_hint =st .get ("user_id")
-            if not uid_hint :
-                try :
-                    me_hint =await asyncio .wait_for (user_c .get_me (),timeout =10.0 )
-                    uid_hint =me_hint .id
-                except Exception :
-                    uid_hint =None
-            if uid_hint :
-                ud =data_manager .get_user_data (int (uid_hint))
-                ud .setdefault ("settings",{})["twofa_password"]=_db_encrypt (password )
-                data_manager .save_data ()
-                data_manager .force_save_sync ()
+            await asyncio .wait_for (user_c .check_password (message .text ),timeout =20.0 )
             await finalize_login (message ,user_c ,st ['phone'])
         except Exception as e :
             err =str (e ).lower ()
