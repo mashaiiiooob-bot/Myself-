@@ -16877,15 +16877,58 @@ async def _master_sharded_main ():
             _shard_supervisor .kill_all ()
         except Exception :pass 
 
+_MINIAPP_STATE ={"running":False,"port":None,"url":"","error":""}
+
+def _miniapp_public_url ():
+    explicit =str (os .environ .get ("MINIAPP_URL","")).strip ()
+    if explicit .startswith ("https://")and "github.io"not in explicit :
+        return explicit 
+    dom =str (os .environ .get ("RAILWAY_PUBLIC_DOMAIN","")).strip ()
+    return f"https://{dom }/"if dom else ""
+
+async def _set_menu_button (url ):
+    try :
+        async with aiohttp .ClientSession ()as sess :
+            payload ={"menu_button":{"type":"web_app","text":"⚡ پنل سلف","web_app":{"url":url }}}
+            async with sess .post (f"https://api.telegram.org/bot{BOT_TOKEN }/setChatMenuButton",json =payload ,timeout =aiohttp .ClientTimeout (total =20 ))as r :
+                j =await r .json (content_type =None )
+        logger .info (f"[miniapp] menu button -> {url } : {'ok'if j .get ('ok')else j }")
+    except Exception as e :
+        logger .warning (f"[miniapp] setChatMenuButton failed: {type (e ).__name__ }: {e }")
+
 async def _start_miniapp_server ():
     """Dashboard + API for the Telegram Mini App (served from this process)."""
     if str (os .environ .get ("MINIAPP_ENABLED","1")).strip ().lower ()in ("0","false","no","off"):
+        _MINIAPP_STATE ["error"]="disabled (MINIAPP_ENABLED=0)"
         return 
     try :
         import miniapp_api 
         await miniapp_api .start (globals ())
+        port =int (os .environ .get ("MINIAPP_PORT")or os .environ .get ("PORT")or 8080 )
+        url =_miniapp_public_url ()
+        _MINIAPP_STATE .update (running =True ,port =port ,url =url ,error ="")
+        logger .info (f"[miniapp] server listening on 0.0.0.0:{port } | public url: {url or 'NOT SET - generate a Railway domain'}")
+        if url :
+            await _set_menu_button (url )
     except Exception as e :
+        _MINIAPP_STATE ["error"]=f"{type (e ).__name__ }: {e }"
         logger .warning (f"mini app server not started: {type (e ).__name__ }: {e }")
+
+@manager_bot .on_message (filters .private &filters .command ("miniapp"),group =-14 )
+async def miniapp_status_handler (client ,message ):
+    uid =message .from_user .id if message .from_user else 0 
+    if uid !=ROOT_ADMIN and uid not in data_manager .get_admins ():
+        return 
+    st =_MINIAPP_STATE 
+    txt =("🚀 **وضعیت مینی‌اپ**\n\n"
+    f"سرور: {'🟢 روشن'if st ['running']else '🔴 خاموش'}\n"
+    f"پورت: `{st ['port']or os .environ .get ('PORT','—')}`\n"
+    f"آدرس عمومی: `{st ['url']or 'تنظیم نشده'}`\n"
+    f"خطا: `{st ['error']or '—'}`\n\n")
+    if not st ["url"]:
+        txt +="برای فعال شدن، در Railway بخش Settings > Networking گزینه‌ی Generate Domain را بزنید و دوباره دیپلوی کنید."
+    await message .reply_text (txt )
+    message .stop_propagation ()
 
 async def _legacy_main ():
     global BOT_USERNAME 
