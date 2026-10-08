@@ -5,7 +5,7 @@
 
 Env: MINIAPP_PORT (default 8080), MINIAPP_ORIGIN (CORS origin of the page, default *).
 Every call is authenticated with Telegram's initData (HMAC with BOT_TOKEN / PREMIUM_BOT_TOKEN)."""
-import asyncio, hashlib, hmac, json, os, time
+import asyncio, hashlib, hmac, json, logging, os, time
 from urllib.parse import parse_qsl
 from aiohttp import web
 
@@ -252,6 +252,24 @@ def make_app(g):
     app = web.Application()
     for p, fn in (('state', state), ('set', setv), ('admin', admin)):
         app.router.add_route('*', '/miniapp/' + p, handler(fn))
+
+    # The dashboard posts client-side errors here (best effort). Rate-limited, never touches bot state.
+    _clog = {'t': 0.0, 'n': 0}
+
+    async def clientlog(req):
+        try:
+            now = time.time()
+            if now - _clog['t'] > 60:
+                _clog['t'], _clog['n'] = now, 0
+            _clog['n'] += 1
+            if _clog['n'] <= 10:
+                raw = (await req.content.read(600)).decode('utf-8', 'replace').replace('\n', ' ')
+                logging.getLogger().info('[miniapp] client: ' + raw)
+        except Exception:
+            pass
+        return web.json_response({'ok': True})
+
+    app.router.add_route('*', '/miniapp/clientlog', clientlog)
     return app
 
 
