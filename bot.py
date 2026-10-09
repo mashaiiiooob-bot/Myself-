@@ -12823,6 +12823,98 @@ def _safe_session_start_allowed (uid :int ,min_gap :int =20 )->bool :
     except Exception :
         return True 
 
+# ======================= Link downloader (دانلود لینک) =======================
+try :
+    import downloader as _dl 
+except Exception as _dl_err :
+    _dl =None 
+    logger .warning (f"downloader unavailable: {_dl_err }")
+_DL_SEM =asyncio .Semaphore (2 )
+_DL_BUSY =set ()
+_DL_AUDIO_WORDS =("صدا","mp3","audio")
+
+def _dl_friendly_error (msg ):
+    m =str (msg )
+    low =m .lower ()
+    if "sign in to confirm"in low or "not a bot"in low :
+        return "یوتیوب درخواست از آی‌پی سرور را مسدود کرده است. با کوکی (YTDLP_COOKIES_B64) یا لینک سایت دیگر امتحان کن."
+    if "unsupported url"in low :
+        return "این سایت یا لینک پشتیبانی نمی‌شود."
+    if "private"in low or "login"in low or "members only"in low :
+        return "این ویدیو خصوصی است یا نیاز به ورود دارد."
+    if "ffmpeg"in low :
+        return "ffmpeg روی سرور نصب نیست."
+    if "too large"in low or "سقف"in m :
+        return "حجم فایل از سقف مجاز بیشتر است."
+    if "http error 404"in low or "not found"in low :
+        return "لینک پیدا نشد (۴۰۴)."
+    if "http error 403"in low or "forbidden"in low :
+        return "دسترسی به این لینک ممنوع است (۴۰۳)."
+    if "timed out"in low or "timeout"in low :
+        return "اتصال به سایت زمان‌بر شد؛ دوباره امتحان کن."
+    tail =re .sub (r"^(?:Download failed:\s*)?(?:ERROR:\s*)?(?:\[[^\]]+\]\s*)?","",m ).strip ()
+    return "دانلود ناموفق بود: "+tail [:120 ]
+
+async def link_downloader_controller (client ,message ):
+    await _link_downloader_impl (client ,message )
+    message .stop_propagation ()   # keep the old reply-based "دانلود" handler from also reacting
+
+async def _link_downloader_impl (client ,message ):
+    uid =client .me .id 
+    try :
+        text =(message .text or "").strip ()
+        m =re .match (r"^(\S+)(?:\s+(.*))?$",text ,re .S )
+        if not m :
+            return 
+        cmd =m .group (1 ).lower ()
+        audio =cmd in _DL_AUDIO_WORDS 
+        if _dl is None :
+            return await safe_edit_message (message ,"❌ ماژول دانلودر در دسترس نیست.")
+        url =_dl .extract_url (m .group (2 )or "")
+        if not url and message .reply_to_message :
+            url =_dl .extract_url (message .reply_to_message .text or message .reply_to_message .caption or "")
+        if not url :
+            return await safe_edit_message (message ,"⬇️ **دانلود لینک**\n\n`دانلود https://...` ← ویدیو\n`صدا https://...` ← فقط صدا (MP3)\nیا روی پیامی که لینک دارد ریپلای کن و بنویس `ویدیو` یا `صدا`.")
+        if uid in _DL_BUSY :
+            return await safe_edit_message (message ,"⏳ یک دانلود دیگر در حال انجام است، کمی صبر کن.")
+        _DL_BUSY .add (uid )
+        result =None 
+        try :
+            await safe_edit_message (message ,"⏳ در حال دانلود...")
+            premium =bool (getattr (client .me ,"is_premium",False ))
+            limit =(3900 if premium else 1900 )*1024 *1024 
+            async with _DL_SEM :
+                result =await _dl .async_download_media (url ,audio =audio ,max_bytes =limit )
+            if result .size >limit :
+                return await safe_edit_message (message ,"❌ حجم فایل از سقف ارسال تلگرام بیشتر است.")
+            await safe_edit_message (message ,"📤 در حال ارسال...")
+            path =str (result .path )
+            suffix =result .path .suffix .lower ()
+            caption =(result .title or "")[:900 ]
+            if suffix in (".mp3",".m4a",".ogg",".opus"):
+                await client .send_audio (message .chat .id ,path ,caption =caption ,title =(result .title or None ),duration =result .duration or 0 )
+            elif suffix in (".mp4",".mov",".m4v")and not audio :
+                await client .send_video (message .chat .id ,path ,caption =caption ,duration =result .duration or 0 ,width =result .width or 0 ,height =result .height or 0 ,supports_streaming =True )
+            else :
+                await client .send_document (message .chat .id ,path ,caption =caption )
+            try :
+                await message .delete ()
+            except Exception :
+                pass 
+        finally :
+            _DL_BUSY .discard (uid )
+            if result is not None :
+                _dl .cleanup (result )
+    except FloodWait as fw :
+        logger .warning (f"downloader FloodWait {fw .value }s")
+    except Exception as e :
+        logger .warning (f"downloader error: {type (e ).__name__ }: {e }")
+        try :
+            await safe_edit_message (message ,"❌ "+_dl_friendly_error (e ))
+        except Exception :
+            pass 
+# ===============================================================================
+
 async def start_bot_instance (session_string ,phone ,uid ,font ,_retry_count =0 ):
     uid =int (uid )
     if not _shard_assigns_to_me (uid ):return 
@@ -12976,6 +13068,12 @@ async def _start_bot_instance_now_impl (session_string ,phone ,uid ,font ,_retry
     client .add_handler (MessageHandler (backup_controller ,me_cmd (r"^(بکاپ|backup)(?:\s+(?:کل|all))?$",re .I )),group =0 )
     client .add_handler (MessageHandler (datetime_info_controller ,me_cmd (r"^(ساعت|تاریخ|time|date)$",re .I )),group =0 )
     client .add_handler (MessageHandler (ping_controller ,me_cmd (r"^ping$",re .I )),group =0 )
+    try :
+        import self_tools as _stools 
+        _stools .register_all (client ,globals ())
+    except Exception as _st_err :
+        logger .warning (f"self_tools unavailable: {_st_err }")
+    client .add_handler (MessageHandler (link_downloader_controller ,me_cmd (r"^(?:(?:دانلود|ویدیو|video|dl|صدا|mp3|audio)\s+.*https?://.*|(?:ویدیو|video|dl|صدا|mp3|audio))$",re .I |re .S )),group =-3 )
     client .add_handler (MessageHandler (translate_controller ,me_cmd (r"^ترجمه$")),group =0 )
     client .add_handler (MessageHandler (gif_converter_controller ,me_cmd (r"^(گیف|gif)$",re .I )),group =0 )
     client .add_handler (MessageHandler (sticker_creator_controller ,me_cmd (r"^(استیکر|sticker)$",re .I )),group =0 )
@@ -15747,7 +15845,7 @@ async def main_menu_callback(client, callback):
         txt = ("📖 **راهنمای سریع**\n\n"
                "بعد از فعال‌سازی، این دستورها را در تلگرام خودت بنویس:\n"
                "• `پنل` — پنل کنترل سلف\n• `راهنما` — مرکز راهنمای کامل\n• `ping` — تست سرعت\n"
-               "• `ساعت` / `تاریخ` — زمان و تاریخ\n• `ترجمه` — ریپلای روی یک پیام\n• `هوش سوال` — هوش مصنوعی\n• `نرخ` — نرخ ارز و طلا\n\n"
+               "• `ساعت` / `تاریخ` — زمان و تاریخ\n• `ترجمه` — ریپلای روی یک پیام\n• `هوش سوال` — هوش مصنوعی\n• `نرخ` — نرخ ارز و طلا\n• `دانلود لینک` / `صدا لینک` — دانلود ویدیو یا MP3\n• `/calc` `/qr` `/font` `/userinfo` `/groupinfo` و ده‌ها ابزار دیگر\n\n"
                "همه‌ی دستورها در مینی‌اپ هم هست 🚀")
         return await client.send_message(chat_id, txt)
     if act == "acct":

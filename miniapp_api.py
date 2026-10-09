@@ -66,6 +66,56 @@ def _user(g, uid):
     return g['data_manager'].data.get('users', {}).get(str(uid), {})
 
 
+AI_TOG = {'ai_stream': ('stream',), 'ai_search': ('search',), 'ai_footer': ('footer',),
+          'ai_auto': ('auto', 'enabled'), 'ai_label': ('auto', 'label'), 'ai_notify': ('auto', 'notify')}
+
+
+def _ai(g, uid):
+    """AI settings (darkself_tools) or None when the package is not installed."""
+    try:
+        from darkself_tools import ai_config as C
+        from darkself_tools.common import Env
+        return C, C.get_cfg(Env(g), uid), Env(g)
+    except Exception:
+        return None
+
+
+def _ai_settings(g, uid):
+    r = _ai(g, uid)
+    if not r:
+        return {}
+    C, cfg, _ = r
+    ok, left = C.quota_check(cfg, 0)
+    out = {k: (cfg[p[0]] if len(p) == 1 else cfg[p[0]][p[1]]) for k, p in AI_TOG.items()}
+    out['ai_persona'] = C.PERSONAS.get(C.persona_name(cfg), ('سفارشی',))[0]
+    out['ai_quota'] = '%d از %d' % (cfg['quota']['used'], cfg['daily_limit'])
+    out['ai_facts'] = '%d مورد' % len(cfg['facts'])
+    return out
+
+
+def _ai_toggle(g, uid, key):
+    r = _ai(g, uid)
+    if not r:
+        return 'ماژول هوش مصنوعی نصب نیست.'
+    C, cfg, env = r
+    if key in AI_TOG:
+        p = AI_TOG[key]
+        d = cfg if len(p) == 1 else cfg[p[0]]
+        d[p[-1]] = not d[p[-1]]
+    elif key == 'ai_persona':
+        keys = list(C.PERSONAS)
+        cur = C.persona_name(cfg)
+        cfg['persona'] = keys[(keys.index(cur) + 1) % len(keys)] if cur in keys else keys[0]
+        for ch in cfg['chats'].values():
+            ch.pop('persona', None)
+    elif key in ('ai_quota', 'ai_facts'):
+        return None
+    else:
+        return 'کلید نامعتبر'
+    C.save_cfg(env, uid)
+    return None
+
+
 def _settings(g, uid):
     out = {}
     for k, (name, dflt) in T.items():
@@ -73,6 +123,7 @@ def _settings(g, uid):
     for k, (name, dflt) in CYC.items():
         out[k] = g[name].get(uid, dflt) if name in g else dflt
     out['translate'] = g['AUTO_TRANSLATE_TARGET'].get(uid) if 'AUTO_TRANSLATE_TARGET' in g else None
+    out.update(_ai_settings(g, uid))
     return out
 
 
@@ -198,6 +249,9 @@ def make_app(g):
             return {'ok': False, 'err': 'سلف شما روشن نیست.'}
         if g['_activation_wait_left'](uid) > 0:
             return {'ok': False, 'err': 'فعال‌سازی در انتظار است؛ کمی بعد دوباره امتحان کنید.'}
+        if str(b.get('key', '')).startswith('ai_'):
+            err = _ai_toggle(g, uid, b['key'])
+            return {'ok': not err, 'err': err, 'settings': _settings(g, uid)} if err else {'ok': True, 'settings': _settings(g, uid)}
         s, err = await _toggle(g, uid, b.get('key'), b.get('val'))
         if err:
             return {'ok': False, 'err': err, 'settings': _settings(g, uid)}
