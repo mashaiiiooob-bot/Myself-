@@ -3,6 +3,7 @@ import urllib.parse
 import requests
 from pyrogram import filters
 from pyrogram.handlers import MessageHandler
+from .prompt import get_persona
 
 async def handler(client, message):
     parts = (message.text or '').split(maxsplit=1)
@@ -30,7 +31,8 @@ async def handler(client, message):
         elif mode == 'code':
             full = f'این کد رو توضیح بده:\n\n{prompt}'
         else:
-            full = f'سوال کاربر (به فارسی جواب بده):\n\n{prompt}'
+            persona = get_persona(client.me.id)
+            full = (persona + '\n\n' if persona else '') + f'سوال کاربر (به فارسی جواب بده):\n\n{prompt}'
         r = await asyncio.to_thread(requests.get, f'https://text.pollinations.ai/{urllib.parse.quote(full)}', timeout=90)
         await status.edit_text(f'🤖 **پاسخ:**\n\n{r.text[:4000]}')
     except Exception as e:

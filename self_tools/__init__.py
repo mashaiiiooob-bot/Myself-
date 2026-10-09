@@ -13,7 +13,7 @@ MODULES = [
     "calc", "uuid", "count_age", "qr", "tr", "date", "bmi", "hash", "json_fmt", "base64_tool",
     "stats", "remind", "passgen", "pray", "tz", "short", "unit", "imgmeta",
     "ip", "weather", "crypto", "price", "wiki", "ai", "image", "voice", "ocr", "removebg",
-    "userinfo", "chatinfo", "checkuser", "font", "ascii_art", "sumfix",
+    "userinfo", "chatinfo", "checkuser", "font", "ascii_art", "sumfix", "prompt", "fwd",
 ]
 
 
@@ -23,6 +23,7 @@ class _Registrar:
 
     def __init__(self, client, g, group):
         self._c, self._g, self._group = client, g or {}, group
+        self.g = self._g
 
     def __getattr__(self, name):
         return getattr(self._c, name)
