@@ -58,5 +58,5 @@ async def fix_handler(client, message):
 
 
 def register(client):
-    client.add_handler(MessageHandler(sum_handler, filters.me & filters.command("sum", prefixes="/.")), group=0)
-    client.add_handler(MessageHandler(fix_handler, filters.me & filters.command("fix", prefixes="/.")), group=0)
+    client.add_handler(MessageHandler(sum_handler, filters.me & filters.command("sum", prefixes=["/", "."])), group=0)
+    client.add_handler(MessageHandler(fix_handler, filters.me & filters.command("fix", prefixes=["/", "."])), group=0)

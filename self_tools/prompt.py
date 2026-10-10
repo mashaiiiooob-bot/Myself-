@@ -52,4 +52,4 @@ async def handler(client, message):
 def register(client):
     global _G
     _G = getattr(client, "g", None) or {}
-    client.add_handler(MessageHandler(handler, filters.me & filters.command("prompt", prefixes="/.")), group=0)
+    client.add_handler(MessageHandler(handler, filters.me & filters.command("prompt", prefixes=["/", "."])), group=0)

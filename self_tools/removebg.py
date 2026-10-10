@@ -53,4 +53,4 @@ async def handler(client, message):
             pass
 
 def register(client):
-    client.add_handler(MessageHandler(handler, filters.me & filters.command('removebg', prefixes='/.')), group=0)
+    client.add_handler(MessageHandler(handler, filters.me & filters.command('removebg', prefixes=['/', '.'])), group=0)

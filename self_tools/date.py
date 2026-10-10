@@ -121,4 +121,4 @@ async def handler(client, message):
         await message.reply_text(text)
 
 def register(client):
-    client.add_handler(MessageHandler(handler, filters.me & filters.command('date', prefixes='/.')), group=0)
+    client.add_handler(MessageHandler(handler, filters.me & filters.command('date', prefixes=['/', '.'])), group=0)

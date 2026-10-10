@@ -40,4 +40,4 @@ async def sha512_h(client, m):
 
 def register(client):
     for cmd, h in [('md5', md5_h), ('sha1', sha1_h), ('sha256', sha256_h), ('sha512', sha512_h)]:
-        client.add_handler(MessageHandler(h, filters.me & filters.command(cmd, prefixes='/.')), group=0)
+        client.add_handler(MessageHandler(h, filters.me & filters.command(cmd, prefixes=['/', '.'])), group=0)

@@ -18,4 +18,4 @@ async def handler(client, message):
     await message.reply_text(f'📈 **آمار متن**\n\n📝 **کاراکتر:** `{chars:,}`\n📝 **بدون فاصله:** `{chars_no_space:,}`\n📚 **کلمه:** `{words:,}`\n📄 **خط:** `{lines:,}`\n🔤 **کلمات یکتا:** `{unique_words:,}`\n\n📏 **میانگین طول کلمه:** `{avg_word:.1f}`\n🏆 **طولانی\u200cترین کلمه:** `{longest[:50]}`')
 
 def register(client):
-    client.add_handler(MessageHandler(handler, filters.me & filters.command('stats', prefixes='/.')), group=0)
+    client.add_handler(MessageHandler(handler, filters.me & filters.command('stats', prefixes=['/', '.'])), group=0)

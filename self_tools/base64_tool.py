@@ -36,5 +36,5 @@ async def decode_handler(client, message):
     await message.reply_text(f'🔓 **Base64 Decode**\n\n📝 **Base64:**\n`{text[:200]}`\n\n✅ **متن:**\n`{decoded[:1500]}`')
 
 def register(client):
-    client.add_handler(MessageHandler(encode_handler, filters.me & filters.command('b64e', prefixes='/.')), group=0)
-    client.add_handler(MessageHandler(decode_handler, filters.me & filters.command('b64d', prefixes='/.')), group=0)
+    client.add_handler(MessageHandler(encode_handler, filters.me & filters.command('b64e', prefixes=['/', '.'])), group=0)
+    client.add_handler(MessageHandler(decode_handler, filters.me & filters.command('b64d', prefixes=['/', '.'])), group=0)

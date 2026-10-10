@@ -44,4 +44,4 @@ async def handler(client, message):
         await status.edit_text(f'❌ خطا: `{e}`')
 
 def register(client):
-    client.add_handler(MessageHandler(handler, filters.me & filters.command('tr', prefixes='/.')), group=0)
+    client.add_handler(MessageHandler(handler, filters.me & filters.command('tr', prefixes=['/', '.'])), group=0)

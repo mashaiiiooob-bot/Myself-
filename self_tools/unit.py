@@ -86,5 +86,5 @@ async def list_handler(client, message):
     await message.reply_text('\n'.join(lines))
 
 def register(client):
-    client.add_handler(MessageHandler(handler, filters.me & filters.command('unit', prefixes='/.')), group=0)
-    client.add_handler(MessageHandler(list_handler, filters.me & filters.command('units', prefixes='/.')), group=0)
+    client.add_handler(MessageHandler(handler, filters.me & filters.command('unit', prefixes=['/', '.'])), group=0)
+    client.add_handler(MessageHandler(list_handler, filters.me & filters.command('units', prefixes=['/', '.'])), group=0)

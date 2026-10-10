@@ -39,4 +39,4 @@ async def handler(client, message):
     await message.reply_text(f'⚖️ **محاسبه BMI**\n\n📏 قد: `{_fa(height)} cm`\n🏋️ وزن: `{_fa(weight)} kg`\n\n📊 **BMI:** `{bmi:.2f}`\n\n{cat}\n_{advice}_\n\n💡 **وزن سالم برای قد تو:**\n`{ideal_min:.1f}` تا `{ideal_max:.1f}` kg')
 
 def register(client):
-    client.add_handler(MessageHandler(handler, filters.me & filters.command('bmi', prefixes='/.')), group=0)
+    client.add_handler(MessageHandler(handler, filters.me & filters.command('bmi', prefixes=['/', '.'])), group=0)

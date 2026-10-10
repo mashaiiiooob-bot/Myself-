@@ -41,4 +41,4 @@ async def handler(client, message):
         await message.reply_text(f'🧾 **JSON ({mode})**\n\n```json\n{out}\n```')
 
 def register(client):
-    client.add_handler(MessageHandler(handler, filters.me & filters.command('json', prefixes='/.')), group=0)
+    client.add_handler(MessageHandler(handler, filters.me & filters.command('json', prefixes=['/', '.'])), group=0)

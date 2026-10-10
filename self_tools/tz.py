@@ -94,5 +94,5 @@ async def list_handler(client, message):
     await message.reply_text('\n'.join(lines))
 
 def register(client):
-    client.add_handler(MessageHandler(handler, filters.me & filters.command('tz', prefixes='/.')), group=0)
-    client.add_handler(MessageHandler(list_handler, filters.me & filters.command('tzlist', prefixes='/.')), group=0)
+    client.add_handler(MessageHandler(handler, filters.me & filters.command('tz', prefixes=['/', '.'])), group=0)
+    client.add_handler(MessageHandler(list_handler, filters.me & filters.command('tzlist', prefixes=['/', '.'])), group=0)

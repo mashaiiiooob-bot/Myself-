@@ -58,5 +58,5 @@ async def channel_handler(client, message):
 
 
 def register(client):
-    client.add_handler(MessageHandler(group_handler, filters.me & filters.command("groupinfo", prefixes="/.")), group=0)
-    client.add_handler(MessageHandler(channel_handler, filters.me & filters.command("channelinfo", prefixes="/.")), group=0)
+    client.add_handler(MessageHandler(group_handler, filters.me & filters.command("groupinfo", prefixes=["/", "."])), group=0)
+    client.add_handler(MessageHandler(channel_handler, filters.me & filters.command("channelinfo", prefixes=["/", "."])), group=0)

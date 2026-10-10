@@ -67,5 +67,5 @@ async def age_handler(client, message):
     await message.reply_text(f'🎂 **سن**\n\n📅 تولد: `{ds}`\n🎈 سن: `{years} سال و {months} ماه و {days} روز`\n\n📊 **آمار:**\n• روز: `{td:,}`\n• ساعت: `{ts // 3600:,}`\n• دقیقه: `{ts // 60:,}`\n• نفس: `~{breaths:,}`\n• ضربان: `~{beats:,}`')
 
 def register(client):
-    client.add_handler(MessageHandler(count_handler, filters.me & filters.command('count', prefixes='/.')), group=0)
-    client.add_handler(MessageHandler(age_handler, filters.me & filters.command('age', prefixes='/.')), group=0)
+    client.add_handler(MessageHandler(count_handler, filters.me & filters.command('count', prefixes=['/', '.'])), group=0)
+    client.add_handler(MessageHandler(age_handler, filters.me & filters.command('age', prefixes=['/', '.'])), group=0)

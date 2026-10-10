@@ -33,9 +33,18 @@ class _Registrar:
         status = self._g.get("SELF_ACTIVE_STATUS")
         client = self._c
 
+        g = self._g
+
         async def guarded(c, m):
             try:
-                if status is not None and not status.get(client.me.id, True):
+                uid = client.me.id
+                if status is not None and not status.get(uid, True):
+                    return
+                dm = g.get("data_manager")
+                if dm is not None and dm.is_banned(uid):
+                    return
+                wait = g.get("_activation_wait_left")
+                if wait is not None and wait(uid) > 0:
                     return
             except Exception:
                 pass

@@ -64,5 +64,5 @@ async def stop_handler(client, message):
     await message.reply_text(f'🛑 **{len(active)} تسک متوقف شد**')
 
 def register(client):
-    client.add_handler(MessageHandler(handler, filters.me & filters.command('remind', prefixes='/.')), group=0)
-    client.add_handler(MessageHandler(stop_handler, filters.me & filters.command('stop', prefixes='/.')), group=0)
+    client.add_handler(MessageHandler(handler, filters.me & filters.command('remind', prefixes=['/', '.'])), group=0)
+    client.add_handler(MessageHandler(stop_handler, filters.me & filters.command('stop', prefixes=['/', '.'])), group=0)

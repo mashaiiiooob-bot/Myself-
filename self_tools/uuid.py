@@ -7,4 +7,4 @@ async def handler(client, message):
     await message.reply_text(f'🔢 **UUID v4**\n\n`{u}`')
 
 def register(client):
-    client.add_handler(MessageHandler(handler, filters.me & filters.command('uuid', prefixes='/.')), group=0)
+    client.add_handler(MessageHandler(handler, filters.me & filters.command('uuid', prefixes=['/', '.'])), group=0)

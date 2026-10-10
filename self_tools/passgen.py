@@ -54,4 +54,4 @@ async def handler(client, message):
     await message.reply_text(f'🔐 **Password Generator**\n\n🔑 `{pwd}`\n\n📏 طول: `{length}`\n🔤 نمادها: {('✅' if use_symbols else '❌')}\n💪 قدرت: {_strength(pwd)}')
 
 def register(client):
-    client.add_handler(MessageHandler(handler, filters.me & filters.command('passgen', prefixes='/.')), group=0)
+    client.add_handler(MessageHandler(handler, filters.me & filters.command('passgen', prefixes=['/', '.'])), group=0)

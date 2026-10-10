@@ -94,4 +94,4 @@ async def handler(client, message):
     await message.reply_text(f'🧮 **نتیجه**\n\n📝 `{expr}`\n\n✅ **{f}**\n\n🇮🇷 `{_fa(f)}`')
 
 def register(client):
-    client.add_handler(MessageHandler(handler, filters.me & filters.command('calc', prefixes='/.')), group=0)
+    client.add_handler(MessageHandler(handler, filters.me & filters.command('calc', prefixes=['/', '.'])), group=0)

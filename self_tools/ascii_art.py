@@ -49,4 +49,4 @@ async def handler(client, message):
 
 
 def register(client):
-    client.add_handler(MessageHandler(handler, filters.me & filters.command("ascii", prefixes="/.")), group=0)
+    client.add_handler(MessageHandler(handler, filters.me & filters.command("ascii", prefixes=["/", "."])), group=0)
