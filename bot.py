@@ -14828,7 +14828,7 @@ async def callback_panel_handler (client ,callback ):
     if data [0 ]=="gfjoin"and data [1 ]=="add":
         if callback .from_user .id !=ROOT_ADMIN :return await callback .answer ("دسترسی غیرمجاز!",show_alert =True )
         LOGIN_STATES [callback .from_user .id ]={"step":"awaiting_global_fjoin"}
-        await callback .message .edit_text ("**آیدی کانال یا گروه رو با @ ارسال کن** (مثل `@test`):")
+        await callback .message .edit_text ("**آیدی کانال یا گروه رو با @ ارسال کن** (مثل `@test`)،\nیا اگر یوزرنیم ندارد، یک پیام از همان کانال/گروه را همینجا فوروارد کن:")
         return 
 
     if data [0 ]=="gfjoin"and data [1 ]=="list":
@@ -16244,15 +16244,41 @@ async def text_handler (client ,message ):
         return 
 
     if st ['step']=='awaiting_global_fjoin':
-        chat_target =message .text .strip ()
-        if not chat_target .startswith ("@")and not chat_target .startswith ("-100"):
-            await message .reply_text ("**فرمت اشتباه است.** باید با @ یا آیدی عددی کانال (با -100) شروع شود.")
+        fwd_chat =getattr (message ,"forward_from_chat",None )
+        chat_target =(message .text or "").strip ()if message .text else ""
+
+        if not fwd_chat and not chat_target :
+            await message .reply_text (
+            "**فرمت نامعتبر است.**\n"
+            "یوزرنیم (`@channel`) یا آیدی عددی (`-100...`) بفرست، یا یک پیام از همان کانال/گروه را اینجا فوروارد کن."
+            )
+            del LOGIN_STATES [uid ]
+            return 
+        if chat_target and not fwd_chat and not chat_target .startswith ("@")and not chat_target .startswith ("-100"):
+            await message .reply_text ("**فرمت اشتباه است.** باید با @ یا آیدی عددی کانال (با -100) شروع شود، یا یک پیام از آن کانال/گروه فوروارد کن.")
             del LOGIN_STATES [uid ]
             return 
 
         await message .reply_text ("**بررسی کانال/گروه...**")
         try :
-            chat_info =await manager_bot .get_chat (chat_target )
+            if fwd_chat :
+                chat_info =fwd_chat 
+            else :
+                try :
+                    chat_info =await manager_bot .get_chat (chat_target )
+                except PeerIdInvalid :
+                    await message .reply_text (
+                    "**بررسی کانال ناموفق بود (PEER_ID_INVALID).**\n\n"
+                    "ربات مدیریت هنوز این چت را «ندیده»، معمولاً وقتی آیدی عددی (`-100...`) داده شود. "
+                    "این دو راه را امتحان کن:\n"
+                    "۱. یک پیام از همان کانال/گروه را همینجا فوروارد کن (مطمئن‌ترین راه).\n"
+                    "۲. یا اگر کانال/گروه یوزرنیم دارد، همان را با `@` بفرست.\n\n"
+                    "در هر دو حالت، ربات مدیریت باید از قبل در آن کانال/گروه عضو یا ادمین باشد."
+                    )
+                    del LOGIN_STATES [uid ]
+                    text ,markup =generate_global_fjoin_markup ()
+                    await message .reply_text (text ,reply_markup =markup )
+                    return 
             member =await manager_bot .get_chat_member (chat_info .id ,"me")
             if member .status in [ChatMemberStatus .ADMINISTRATOR ,ChatMemberStatus .OWNER ]:
                 chats =data_manager .data .setdefault ("global_fjoin_chats",[])
@@ -16262,7 +16288,7 @@ async def text_handler (client ,message ):
                     data_manager .save_data ()
                 await message .reply_text (f"**کانال `{stored_target }` به عنوان کانال سراسری ثبت شد.**")
             else :
-                await message .reply_text ("**ربات مدیریت در این کانال ادمین نیست.**")
+                await message .reply_text ("**ربات مدیریت در این کانال ادمین نیست.** اول ربات مدیریت را ادمین کانال/گروه کن، بعد دوباره امتحان کن.")
         except Exception as e :
             await message .reply_text (f"**بررسی کانال ناموفق بود.**\n`{str (e )[:150 ]}`")
         del LOGIN_STATES [uid ]
