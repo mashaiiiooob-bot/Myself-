@@ -14,6 +14,7 @@ MODULES = [
     "stats", "remind", "passgen", "pray", "tz", "short", "unit", "imgmeta",
     "ip", "weather", "crypto", "price", "wiki", "ai", "image", "voice", "ocr", "removebg",
     "userinfo", "chatinfo", "checkuser", "font", "ascii_art", "sumfix", "prompt", "fwd",
+    "selfloop",
 ]
 
 
@@ -57,14 +58,23 @@ class _Registrar:
 def register_all(client, g=None, group=-6):
     reg = _Registrar(client, g, group)
     ok, failed = 0, []
+    resumers = []
     for name in MODULES:
         try:
             mod = importlib.import_module(f"{__name__}.{name}")
             mod.register(reg)
             ok += 1
+            if hasattr(mod, "resume"):
+                resumers.append(mod.resume)
         except Exception as e:  # keep going
             failed.append(f"{name}: {type(e).__name__}: {e}")
     if failed:
         log.warning("self_tools: %d modules skipped: %s", len(failed), "; ".join(failed))
     log.info("self_tools: %d tools registered", ok)
+    for fn in resumers:
+        try:
+            import asyncio
+            asyncio.create_task(fn(client, g or {}))
+        except Exception as e:
+            log.warning("self_tools: resume hook failed: %s: %s", type(e).__name__, e)
     return ok
