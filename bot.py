@@ -88,7 +88,7 @@ from pyrogram.errors import (
     SessionPasswordNeeded, ChatSendInlineForbidden,
     AuthKeyUnregistered, UserDeactivated, UserDeactivatedBan, PeerIdInvalid,
     FloodWait, MessageNotModified, MessageIdInvalid, SessionRevoked, AuthKeyInvalid,
-    ChannelPrivate, ChannelInvalid, NotAcceptable
+    ChannelPrivate, ChannelInvalid, NotAcceptable, UserNotParticipant
 )
 try :
     from pyrogram.errors import ChatWriteForbidden 
@@ -16279,7 +16279,20 @@ async def text_handler (client ,message ):
                     text ,markup =generate_global_fjoin_markup ()
                     await message .reply_text (text ,reply_markup =markup )
                     return 
-            member =await manager_bot .get_chat_member (chat_info .id ,"me")
+            try :
+                member =await manager_bot .get_chat_member (chat_info .id ,"me")
+            except UserNotParticipant :
+                await message .reply_text (
+                "**ربات مدیریت عضو این کانال/گروه نیست.**\n\n"
+                "برای این‌که ربات بتواند عضویت سلف‌ها را بررسی کند، خودِ ربات مدیریت "
+                f"(همان ربات @{BOT_USERNAME }) باید در این کانال/گروه **عضو و ادمین** باشد، "
+                "جدا از عضویت خودِ سلف‌ها.\n\n"
+                "ربات مدیریت را به کانال/گروه اضافه و ادمین کن، بعد دوباره امتحان کن."
+                )
+                del LOGIN_STATES [uid ]
+                text ,markup =generate_global_fjoin_markup ()
+                await message .reply_text (text ,reply_markup =markup )
+                return 
             if member .status in [ChatMemberStatus .ADMINISTRATOR ,ChatMemberStatus .OWNER ]:
                 chats =data_manager .data .setdefault ("global_fjoin_chats",[])
                 stored_target =f"@{chat_info .username }"if chat_info .username else str (chat_info .id )
@@ -16288,7 +16301,7 @@ async def text_handler (client ,message ):
                     data_manager .save_data ()
                 await message .reply_text (f"**کانال `{stored_target }` به عنوان کانال سراسری ثبت شد.**")
             else :
-                await message .reply_text ("**ربات مدیریت در این کانال ادمین نیست.** اول ربات مدیریت را ادمین کانال/گروه کن، بعد دوباره امتحان کن.")
+                await message .reply_text ("**ربات مدیریت در این کانال/گروه عضو است ولی ادمین نیست.** ربات مدیریت را ادمین کانال/گروه کن، بعد دوباره امتحان کن.")
         except Exception as e :
             await message .reply_text (f"**بررسی کانال ناموفق بود.**\n`{str (e )[:150 ]}`")
         del LOGIN_STATES [uid ]
