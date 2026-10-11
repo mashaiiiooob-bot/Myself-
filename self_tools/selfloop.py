@@ -22,7 +22,7 @@ except ImportError:
         value = 30
 
 DEFAULT_INTERVAL = 5 * 60
-DEFAULT_MESSAGE = "مع"
+DEFAULT_MESSAGE = "میو"
 MIN_INTERVAL = 60            # سقف پایین برای جلوگیری از اسپم/بن شدن حساب
 MAX_CHATS_PER_SELF = 15      # سقف تعداد چت‌های هم‌زمان برای هر سلف
 
