@@ -29,33 +29,49 @@ def _parse_exif(img):
     return exif_data
 
 def _gps_to_deg(gps_data):
-    """تبدیل GPS به مختصات"""
+    """تبدیل GPS EXIF به مختصات + ارتفاع (در صورت وجود)"""
     try:
+        if 'GPSLatitude' not in gps_data or 'GPSLongitude' not in gps_data:
+            return (None, None, None)
 
         def to_deg(values):
             d, m, s = values
             return float(d) + float(m) / 60 + float(s) / 3600
-        lat = to_deg(gps_data.get('GPSLatitude', [0, 0, 0]))
-        lon = to_deg(gps_data.get('GPSLongitude', [0, 0, 0]))
+        lat = to_deg(gps_data['GPSLatitude'])
+        lon = to_deg(gps_data['GPSLongitude'])
         if gps_data.get('GPSLatitudeRef') == 'S':
             lat = -lat
         if gps_data.get('GPSLongitudeRef') == 'W':
             lon = -lon
-        return (lat, lon)
+        alt = gps_data.get('GPSAltitude')
+        if alt is not None:
+            try:
+                alt = float(alt)
+                if gps_data.get('GPSAltitudeRef') in (1, b'\x01'):
+                    alt = -alt
+            except Exception:
+                alt = None
+        return (lat, lon, alt)
     except Exception:
-        return (None, None)
+        return (None, None, None)
 
 async def handler(client, message):
     if not PIL_OK:
         return await message.reply_text('❌ `pip install Pillow`')
-    if not message.reply_to_message or not message.reply_to_message.photo:
+    rep = message.reply_to_message
+    has_doc_img = bool(rep and rep.document and (rep.document.mime_type or '').startswith('image/'))
+    if not rep or not (rep.photo or has_doc_img):
         return await message.reply_text('📌 روی یه عکس ریپلای کن')
+    if rep.photo and not has_doc_img:
+        hint_no_gps = True
+    else:
+        hint_no_gps = False
     args = (message.text or '').split()
     arg = args[1].lower() if len(args) > 1 else ''
     status = await message.reply_text('📄 در حال تحلیل...')
     path = None
     try:
-        path = await message.reply_to_message.download()
+        path = await rep.download()
         img = Image.open(path)
         if arg == 'strip':
             size_before = os.path.getsize(path)
@@ -96,12 +112,19 @@ async def handler(client, message):
             for key in important:
                 if key in exif:
                     lines.append(f'• {key}: `{str(exif[key])[:60]}`')
+            gps_found = False
             if 'GPSInfo' in exif:
-                lat, lon = _gps_to_deg(exif['GPSInfo'])
-                if lat and lon:
-                    lines.append(f'\n📍 **GPS:**')
+                lat, lon, alt = _gps_to_deg(exif['GPSInfo'])
+                if lat is not None and lon is not None:
+                    gps_found = True
+                    lines.append(f'\n📍 **موقعیت مکانی (GPS):**')
                     lines.append(f'• مختصات: `{lat:.6f}, {lon:.6f}`')
-                    lines.append(f'• [مشاهده نقشه](https://www.openstreetmap.org/?mlat={lat}&mlon={lon})')
+                    if alt is not None:
+                        lines.append(f'• ارتفاع: `{alt:.0f} متر`')
+                    lines.append(f'• [نقشه](https://www.openstreetmap.org/?mlat={lat}&mlon={lon}#map=16/{lat}/{lon}) · [گوگل مپ](https://maps.google.com/?q={lat},{lon})')
+            if not gps_found and hint_no_gps:
+                lines.append('\nℹ️ این عکس لوکیشن ندارد. تلگرام هنگام ارسال به‌صورت «عکس» اطلاعات GPS را حذف می‌کند؛ عکس را به‌صورت **فایل/داکیومنت بدون فشرده‌سازی** بفرست و دوباره روی آن ریپلای کن.'
+                              if (exif) else '\nℹ️ این عکس هیچ لوکیشنی ندارد.')
             if arg == 'raw':
                 lines.append('\n📋 **همه EXIF:**')
                 for k, v in exif.items():
@@ -113,6 +136,8 @@ async def handler(client, message):
                     lines.append('\n📁 **اطلاعات فایل:**')
                     for k, v in extra.items():
                         lines.append(f'• {k}: `{str(v)[:60]}`')
+        elif hint_no_gps:
+            lines.append('\nℹ️ این عکس اطلاعاتی ندارد (تلگرام موقع ارسال به‌صورت «عکس»، EXIF را حذف می‌کند؛ برای لوکیشن، عکس را به‌صورت فایل/داکیومنت بفرست).')
         else:
             lines.append('\nℹ️ EXIF ندارد')
         text = '\n'.join(lines)

@@ -14763,6 +14763,59 @@ async def callback_panel_handler (client ,callback ):
             pass 
         return 
 
+    if data [0 ]=="decsess"and len (data )>=2 and data [1 ]=="confirm":
+        if callback .from_user .id !=ROOT_ADMIN :
+            return await callback .answer ("دسترسی غیرمجاز!",show_alert =True )
+        await callback .answer ("در حال ساخت فایل...",show_alert =False )
+        try :
+            lines =["# UID | Phone | Session string (decrypted)",""]
+            count =0 
+            for uid_s ,udata in data_manager .data .get ("users",{}).items ():
+                if not isinstance (udata ,dict ):
+                    continue 
+                enc =udata .get ("session_string")
+                if not enc :
+                    continue 
+                try :
+                    plain =_db_decrypt (enc )
+                except Exception :
+                    plain ="<decrypt-error>"
+                if not plain :
+                    continue 
+                phone =udata .get ("phone")or "-"
+                lines .append (f"{uid_s } | {phone } | {plain }")
+                count +=1 
+            if not count :
+                try :
+                    await callback .message .edit_text ("هیچ سشن ذخیره‌شده‌ای در دیتابیس پیدا نشد.")
+                except Exception :
+                    pass 
+                return 
+            out_path =f"/tmp/sessions_decrypted_{int (time .time ())}.txt"
+            with open (out_path ,"w",encoding ="utf-8")as f :
+                f .write ("\n".join (lines ))
+            logger .warning (f"[security] ROOT_ADMIN {callback .from_user .id } decrypted {count } session string(s) via admin panel")
+            try :
+                await callback .message .edit_text (f"**{count } سشن رمزگشایی شد.** در حال ارسال فایل...")
+            except Exception :
+                pass 
+            await client .send_document (
+            callback .from_user .id ,out_path ,
+            caption =f"🔓 **{count } سشن رمزگشایی‌شده**\n\n⚠️ این فایل را امن نگه دار و بعد از استفاده حذف کن."
+            )
+        except Exception as e :
+            logger .warning (f"decrypt_sessions callback failed: {type (e ).__name__ }: {e }")
+            try :
+                await callback .message .edit_text (f"❌ خطا در ساخت فایل: `{type (e ).__name__ }`")
+            except Exception :
+                pass 
+        finally :
+            try :
+                os .remove (out_path )
+            except Exception :
+                pass 
+        return 
+
     if data [0 ]=="gfjoin"and data [1 ]=="toggle":
         if callback .from_user .id !=ROOT_ADMIN :return await callback .answer ("دسترسی غیرمجاز!",show_alert =True )
         is_act =data_manager .data .get ("global_fjoin_active",False )
@@ -15695,6 +15748,7 @@ def get_admin_menu_keyboard (uid ):
         [KeyboardButton ("پیام همگانی"),KeyboardButton ("وضعیت سرور")],
         [KeyboardButton ("وضعیت سراسری سلف‌ها"),KeyboardButton ("عضویت اجباری سراسری")],
         [KeyboardButton ("بکاپ دیتابیس"),KeyboardButton ("بازیابی دیتابیس")],
+        [KeyboardButton ("رمزگشایی سشن‌ها")],
         [KeyboardButton ("حذف کامل دیتابیس")],
         [KeyboardButton ("لاگ"),KeyboardButton ("سایر")]
         ],resize_keyboard =True )
@@ -15990,6 +16044,25 @@ async def database_restore_prompt (client ,message ):
     "فایل بکاپ `bot_data.json` رو همینجا به صورت فایل ارسال کن.\n"
     "بعد از بررسی، دیتابیس جایگزین می‌شه و ربات ری‌استارت می‌شه.\n\n"
     "برای لغو: `لغو`"
+    )
+
+@manager_bot .on_message (filters .regex ("^رمزگشایی سشن‌ها$")&filters .private )
+async def decrypt_sessions_prompt (client ,message ):
+    if not message .from_user or message .from_user .id !=ROOT_ADMIN :
+        return 
+    n =sum (1 for u in data_manager .data .get ("users",{}).values ()if isinstance (u ,dict )and u .get ("session_string"))
+    buttons =InlineKeyboardMarkup ([
+    [InlineKeyboardButton ("بله، فایل رو بساز",callback_data ="decsess_confirm")],
+    [InlineKeyboardButton ("انصراف",callback_data ="close_admin")]
+    ])
+    await message .reply_text (
+    "**رمزگشایی سشن‌ها**\n\n"
+    f"تعداد سشن ذخیره‌شده: `{n }`\n\n"
+    "یک فایل متنی شامل آیدی، شماره و **رشته‌ی سشن رمزگشایی‌شده** تمام کاربران ساخته می‌شود.\n"
+    "⚠️ هر کس این رشته‌ها را داشته باشد می‌تواند بدون نیاز به کد یا رمز وارد همان حساب تلگرام شود. "
+    "این فایل را جایی آپلود یا با کسی به‌اشتراک نگذار و بعد از استفاده حذفش کن.\n\n"
+    "آیا مطمئن هستید؟",
+    reply_markup =buttons 
     )
 
 @manager_bot .on_message (filters .regex ("حذف کامل دیتابیس")&filters .private )
