@@ -51,12 +51,12 @@ except Exception:
     uvloop = None
 
 try :
-    _darkself_loop =asyncio .get_event_loop ()
+    _voldyself_loop =asyncio .get_event_loop ()
 except RuntimeError :
-    _darkself_loop =asyncio .new_event_loop ()
-    asyncio .set_event_loop (_darkself_loop )
+    _voldyself_loop =asyncio .new_event_loop ()
+    asyncio .set_event_loop (_voldyself_loop )
 
-def _darkself_loop_exception_handler (loop ,context ):
+def _voldyself_loop_exception_handler (loop ,context ):
     try :
         message =str (context .get ("message","")).lower ()
         exc =context .get ("exception")
@@ -68,7 +68,7 @@ def _darkself_loop_exception_handler (loop ,context ):
         pass 
     loop .default_exception_handler (context )
 
-_darkself_loop .set_exception_handler (_darkself_loop_exception_handler )
+_voldyself_loop .set_exception_handler (_voldyself_loop_exception_handler )
 
 from pyrogram.methods.messages.inline_session import get_session as _pem_get_session
 from pyrogram.utils import pack_inline_message_id as _pyro_pack_inline
@@ -137,7 +137,7 @@ datefmt ="%Y-%m-%d %H:%M:%S"
 )
 logger =logging .getLogger ()
 
-class DarkselfNoiseFilter (logging .Filter ):
+class VoldyselfNoiseFilter (logging .Filter ):
     NOISY_PATTERNS =(
     "connection lost",
     "socket.send() raised exception",
@@ -165,7 +165,7 @@ class DarkselfNoiseFilter (logging .Filter ):
         except Exception :
             return True 
 
-_noise_filter =DarkselfNoiseFilter ()
+_noise_filter =VoldyselfNoiseFilter ()
 logger .addFilter (_noise_filter )
 
 for _log_name in ("pyrogram","pyrogram.session","pyrogram.connection","pyrogram.dispatcher","asyncio"):
@@ -220,12 +220,12 @@ except Exception as _diag_e:
 
 import multiprocessing as _mp 
 
-_SHARD_ID_ENV =os .environ .get ("DARKSELF_SHARD_ID")
+_SHARD_ID_ENV =os .environ .get ("VOLDYSELF_SHARD_ID")
 SHARD_ID =int (_SHARD_ID_ENV )if (_SHARD_ID_ENV or "").isdigit ()else None 
-_SHARD_COUNT_ENV =os .environ .get ("DARKSELF_SHARD_COUNT")
+_SHARD_COUNT_ENV =os .environ .get ("VOLDYSELF_SHARD_COUNT")
 SHARD_COUNT =int (_SHARD_COUNT_ENV )if (_SHARD_COUNT_ENV or "").isdigit ()else 0 
 
-ADMIN_LOG_DIR =os .path .join (os .path .dirname (os .path .abspath (__file__ )),".darkself_logs")
+ADMIN_LOG_DIR =os .path .join (os .path .dirname (os .path .abspath (__file__ )),".voldyself_logs")
 ADMIN_LOG_SOURCE =f"shard-{SHARD_ID }"if SHARD_ID is not None else "manager"
 
 def _redact_admin_log (text ):
@@ -243,7 +243,7 @@ def _redact_admin_log (text ):
     text =re .sub (r"[\U0001F000-\U0001FAFF\u2600-\u27BF\uFE0F\u200D]","",text )
     return text 
 
-class DarkselfAdminLogFormatter (logging .Formatter ):
+class VoldyselfAdminLogFormatter (logging .Formatter ):
     def format (self ,record ):
         text =record .getMessage ()
         if record .exc_info :
@@ -253,22 +253,22 @@ class DarkselfAdminLogFormatter (logging .Formatter ):
         "source":ADMIN_LOG_SOURCE ,"text":_redact_admin_log (text )[:3000 ]
         },ensure_ascii =False )
 
-class DarkselfPrivateLogFile (RotatingFileHandler ):
+class VoldyselfPrivateLogFile (RotatingFileHandler ):
     def handleError (self ,record ):
         
         pass 
 
-class DarkselfAdminLogHandler (logging .Handler ):
+class VoldyselfAdminLogHandler (logging .Handler ):
     def __init__ (self ):
         super ().__init__ (level =logging .INFO )
         self .recent =collections .deque (maxlen =300 )
         self .disk =None 
-        formatter =DarkselfAdminLogFormatter ()
+        formatter =VoldyselfAdminLogFormatter ()
         self .setFormatter (formatter )
         try :
             os .makedirs (ADMIN_LOG_DIR ,mode =0o700 ,exist_ok =True )
             path =os .path .join (ADMIN_LOG_DIR ,ADMIN_LOG_SOURCE +".jsonl")
-            self .disk =DarkselfPrivateLogFile (path ,maxBytes =524288 ,backupCount =2 ,encoding ="utf-8")
+            self .disk =VoldyselfPrivateLogFile (path ,maxBytes =524288 ,backupCount =2 ,encoding ="utf-8")
             self .disk .setFormatter (formatter )
             try :os .chmod (path ,0o600 )
             except OSError :pass 
@@ -284,7 +284,7 @@ class DarkselfAdminLogHandler (logging .Handler ):
         except Exception :
             pass 
 
-_ADMIN_LOG_HANDLER =DarkselfAdminLogHandler ()
+_ADMIN_LOG_HANDLER =VoldyselfAdminLogHandler ()
 logger .addHandler (_ADMIN_LOG_HANDLER )
 
 if _PILLOW_IMPORT_ERROR is not None:
@@ -336,7 +336,7 @@ def _read_recent_admin_logs ():
             continue 
     return sorted (records .values (),key =lambda item :item ["ts"],reverse =True )[:300 ]
 
-SHARD_MASTER_MODE =(SHARD_ID is None )and bool (int (os .environ .get ("DARKSELF_SHARDING_ACTIVE","0")))
+SHARD_MASTER_MODE =(SHARD_ID is None )and bool (int (os .environ .get ("VOLDYSELF_SHARDING_ACTIVE","0")))
 
 _SHARD_RELOAD_EVENT =None 
 _SHARD_STATUS_DICT =None 
@@ -363,7 +363,7 @@ def _shard_init_ipc ():
             _SHARD_RELOAD_EVENT =None 
             _SHARD_STATUS_DICT ={}
 
-_SHARD_RELOAD_SENTINEL = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".darkself_shard_reload")
+_SHARD_RELOAD_SENTINEL = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".voldyself_shard_reload")
 
 def _shard_reload_signature():
     try:
@@ -428,16 +428,16 @@ class _ShardSupervisor :
 
     def _spawn_worker (self ,shard_id ,total ):
         env =os .environ .copy ()
-        env ["DARKSELF_SHARD_ID"]=str (shard_id )
-        env ["DARKSELF_SHARD_COUNT"]=str (total )
-        env ["DARKSELF_SHARDING_ACTIVE"]="1"
+        env ["VOLDYSELF_SHARD_ID"]=str (shard_id )
+        env ["VOLDYSELF_SHARD_COUNT"]=str (total )
+        env ["VOLDYSELF_SHARDING_ACTIVE"]="1"
         try :
 
             ctx =_mp .get_context ("spawn")
             p =ctx .Process (
             target =_shard_worker_entry ,
             args =(shard_id ,total ),
-            name =f"darkself-shard-{shard_id }",
+            name =f"voldyself-shard-{shard_id }",
             daemon =False ,
             )
             p .start ()
@@ -597,7 +597,7 @@ def patch_pyrogram_runtime_noise ():
     try :
         ChatClass =pyrogram .types .Chat 
         original_parse =ChatClass ._parse 
-        if not getattr (original_parse ,"_darkself_safe",False ):
+        if not getattr (original_parse ,"_voldyself_safe",False ):
             def safe_chat_parse (client ,message ,users ,chats ,is_chat =True ):
                 try :
                     return original_parse (client ,message ,users ,chats ,is_chat )
@@ -615,7 +615,7 @@ def patch_pyrogram_runtime_noise ():
                         )
                     except Exception :
                         return None 
-            safe_chat_parse ._darkself_safe =True 
+            safe_chat_parse ._voldyself_safe =True 
             ChatClass ._parse =staticmethod (safe_chat_parse )
     except Exception :
         pass 
@@ -624,7 +624,7 @@ def patch_pyrogram_runtime_noise ():
         from pyrogram.types.messages_and_media.message_story import MessageStory as _MS
         async def _skip_ms_story (*a ,**kw ):
             return None 
-        _skip_ms_story ._darkself_safe =True 
+        _skip_ms_story ._voldyself_safe =True 
         try :
             _MS ._parse =staticmethod (_skip_ms_story )
         except Exception :
@@ -635,7 +635,7 @@ def patch_pyrogram_runtime_noise ():
     try :
         async def _skip_story (*a ,**kw ):
             return None 
-        _skip_story ._darkself_safe =True 
+        _skip_story ._voldyself_safe =True 
         for _cls_name in ("Story","StoryDeleted","StoryForwarded"):
             _cls =getattr (pyrogram .types ,_cls_name ,None )
             if _cls is None :
@@ -661,7 +661,7 @@ def patch_pyrogram_runtime_noise ():
     try :
         CallbackQueryClass =pyrogram .types .CallbackQuery 
         original_answer =CallbackQueryClass .answer 
-        if not getattr (original_answer ,"_darkself_safe",False ):
+        if not getattr (original_answer ,"_voldyself_safe",False ):
             async def safe_callback_answer (self ,*args ,**kwargs ):
                 try :
                     return await original_answer (self ,*args ,**kwargs )
@@ -670,7 +670,7 @@ def patch_pyrogram_runtime_noise ():
                     if "query_id_invalid"in low or "query id is invalid"in low or "setbotcallbackanswer"in low :
                         return None 
                     raise 
-            safe_callback_answer ._darkself_safe =True 
+            safe_callback_answer ._voldyself_safe =True 
             CallbackQueryClass .answer =safe_callback_answer 
     except Exception :
         pass 
@@ -678,7 +678,7 @@ def patch_pyrogram_runtime_noise ():
     try :
         MessageClass =pyrogram .types .Message 
         original_delete =MessageClass .delete 
-        if not getattr (original_delete ,"_darkself_guard",False ):
+        if not getattr (original_delete ,"_voldyself_guard",False ):
             async def guarded_message_delete (self ,*args ,**kwargs ):
                 try :
                     client =getattr (self ,"_client",None )or getattr (self ,"client",None )
@@ -711,7 +711,7 @@ def patch_pyrogram_runtime_noise ():
                 except Exception :
                     pass 
                 return await original_delete (self ,*args ,**kwargs )
-            guarded_message_delete ._darkself_guard =True 
+            guarded_message_delete ._voldyself_guard =True 
             MessageClass .delete =guarded_message_delete 
     except Exception :
         pass 
@@ -788,7 +788,7 @@ def _filter_raw_updates (updates ):
         return None 
     return updates 
 
-def _darkself_optional_client_kwargs ():
+def _voldyself_optional_client_kwargs ():
     out ={}
     try :
         import inspect as _inspect
@@ -804,7 +804,7 @@ class ResilientClient (Client ):
         kwargs .setdefault ("sleep_threshold",30 )
         kwargs .setdefault ("max_concurrent_transmissions",1 )
         kwargs .setdefault ("workers",1 )
-        kwargs .update (_darkself_optional_client_kwargs ())
+        kwargs .update (_voldyself_optional_client_kwargs ())
         try :
             import inspect as _inspect2
             if "skip_updates" in _inspect2 .signature (Client .__init__ ).parameters :
@@ -814,9 +814,9 @@ class ResilientClient (Client ):
         except Exception :
             kwargs .pop ("skip_updates",None )
         super ().__init__ (*args ,**kwargs )
-        self ._darkself_invalid_session_cleanup =False 
+        self ._voldyself_invalid_session_cleanup =False 
 
-    def _extract_darkself_uid (self ):
+    def _extract_voldyself_uid (self ):
         try :
             name =getattr (self ,"name","")or ""
             if name .startswith ("bot_"):
@@ -829,10 +829,10 @@ class ResilientClient (Client ):
             return 0 
 
     def _schedule_invalid_session_cleanup (self ,reason ="SESSION_INVALID"):
-        if self ._darkself_invalid_session_cleanup :
+        if self ._voldyself_invalid_session_cleanup :
             return 
-        self ._darkself_invalid_session_cleanup =True 
-        uid =self ._extract_darkself_uid ()
+        self ._voldyself_invalid_session_cleanup =True 
+        uid =self ._extract_voldyself_uid ()
 
         async def cleanup ():
             try :
@@ -2180,7 +2180,7 @@ class DataManager :
         targets =self .data .setdefault ("admin_reply_targets",{})
         return targets .get (str (message_id ))
 
-manager_bot =Client ("manager_bot",api_id =API_ID ,api_hash =API_HASH ,bot_token =BOT_TOKEN ,workers =2 ,**_darkself_optional_client_kwargs ())
+manager_bot =Client ("manager_bot",api_id =API_ID ,api_hash =API_HASH ,bot_token =BOT_TOKEN ,workers =2 ,**_voldyself_optional_client_kwargs ())
 data_manager =DataManager (DATA_FILE )
 
 # Railway / Linux graceful shutdown
@@ -2241,11 +2241,11 @@ async def cpu_stats_sampler ():
             pass 
 
 def _sharding_enabled_for (cpu_limit ):
-    if os .environ .get ("DARKSELF_SHARD","0")!="1":
+    if os .environ .get ("VOLDYSELF_SHARD","0")!="1":
         return False 
     if cpu_limit <=1 :
         return False 
-    if os .environ .get ("DARKSELF_NO_SHARD","0")=="1":
+    if os .environ .get ("VOLDYSELF_NO_SHARD","0")=="1":
         return False 
     if SHARD_ID is not None :
         return False 
@@ -2303,7 +2303,7 @@ def apply_server_limits ():
         try :
             _shard_init_ipc ()
             _shard_supervisor .resize (n )
-            os .environ ["DARKSELF_SHARDING_ACTIVE"]="1"
+            os .environ ["VOLDYSELF_SHARDING_ACTIVE"]="1"
         except Exception as e :
             logger .error (f"[master] shard supervisor resize failed: {e }")
 
@@ -2325,7 +2325,7 @@ def apply_server_limits ():
     try :
         if _SHARD_CURRENT_N >0 or _shard_supervisor .workers :
             _shard_supervisor .kill_all ()
-            os .environ .pop ("DARKSELF_SHARDING_ACTIVE",None )
+            os .environ .pop ("VOLDYSELF_SHARDING_ACTIVE",None )
     except Exception :
         pass 
 
@@ -2513,11 +2513,11 @@ RAW_TTL_MEDIA_HINTS_LIMIT =500
 ANTI_DELETE_MEDIA_TASKS =set ()
 ANTI_DELETE_MEDIA_TASK_LIMIT =12 
 ANTI_DELETE_MEDIA_SEMAPHORE =None 
-DOWNLOAD_TEMP_DIR ="/tmp/darkself_downloads"
+DOWNLOAD_TEMP_DIR ="/tmp/voldyself_downloads"
 DIRECT_DOWNLOAD_MAX_MB =80 
 STICKER_SOURCE_MAX_MB =12 
-STARTUP_CONCURRENCY =max (2 ,min (8 ,int (os .getenv ("DARKSELF_STARTUP_CONCURRENCY","4"))))
-STARTUP_BATCH_PAUSE =float (os .getenv ("DARKSELF_STARTUP_BATCH_PAUSE","0.03"))
+STARTUP_CONCURRENCY =max (2 ,min (8 ,int (os .getenv ("VOLDYSELF_STARTUP_CONCURRENCY","4"))))
+STARTUP_BATCH_PAUSE =float (os .getenv ("VOLDYSELF_STARTUP_BATCH_PAUSE","0.03"))
 
 BIO_CLOCK_STATUS ,BIO_DATE_STATUS ,BIO_DATE_TYPE ,BIO_FONT_CHOICE ={},{},{},{}
 
@@ -2850,7 +2850,7 @@ async def schedule_inline_auto_close_by_chat (kind :str ,uid :int ,client ,chat_
                         via_ok =bool (via_bot and BOT_USERNAME and getattr (via_bot ,"username","").lower ()==BOT_USERNAME .lower ())
                     except Exception :
                         pass 
-                    text_ok ="𝗗𝗔𝗥𝗞𝗦𝗘𝗟𝗙"in txt or "DARKSELF"in txt or (kind =="help"and "COMMAND CENTER"in txt )
+                    text_ok ="𝗩𝗢𝗟𝗗𝗬𝗦𝗘𝗟𝗙"in txt or "VOLDYSELF"in txt or (kind =="help"and "COMMAND CENTER"in txt )
                     if has_markup or via_ok or text_ok :
                         candidate =msg 
                         break 
@@ -2897,7 +2897,7 @@ async def register_auto_close_after_inline_send (kind :str ,uid :int ,client ,ch
                     continue 
                 via_bot =getattr (msg ,"via_bot",None )
                 txt =(getattr (msg ,"text",None )or getattr (msg ,"caption",None )or "")
-                if (manager_id and via_bot and via_bot .id ==manager_id )or "𝗗𝗔𝗥𝗞𝗦𝗘𝗟𝗙"in txt or "DARKSELF"in txt :
+                if (manager_id and via_bot and via_bot .id ==manager_id )or "𝗩𝗢𝗟𝗗𝗬𝗦𝗘𝗟𝗙"in txt or "VOLDYSELF"in txt :
                     candidate =msg 
                     break 
             except Exception :
@@ -3441,7 +3441,7 @@ async def help_cmd_handler (client ,message ):
             await safe_edit_message (message ,"**Inline Mode ربات مدیریت غیرفعال است.**")
         else :
             try :
-                await safe_edit_message (message ,"**راهنمای DARKSELF در حال حاضر قابل نمایش نیست.**\n`Inline Mode` ربات مدیریت را بررسی کنید.")
+                await safe_edit_message (message ,"**راهنمای VOLDYSELF در حال حاضر قابل نمایش نیست.**\n`Inline Mode` ربات مدیریت را بررسی کنید.")
             except Exception :
                 pass 
 
@@ -4059,7 +4059,7 @@ def build_wallet_text (wallet_key :str ,wallet_data :dict )->str :
         return f"**ولت {title } تنظیم نشده است.**"
     return (
     f"╔══════════════════════════════╗\n"
-    f"        **𝗗𝗔𝗥𝗞𝗦𝗘𝗟𝗙 | WALLET**\n"
+    f"        **𝗩𝗢𝗟𝗗𝗬𝗦𝗘𝗟𝗙 | WALLET**\n"
     f"╚══════════════════════════════╝\n\n"
     f"**ولت:** `{title }`\n"
     f"**آدرس:**\n`{address }`\n\n"
@@ -4070,7 +4070,7 @@ def build_wallet_list_text (uid :int )->str :
     wallets =get_user_wallets (uid )
     rows =[
     "╔══════════════════════════════╗",
-    "        **𝗗𝗔𝗥𝗞𝗦𝗘𝗟𝗙 | WALLETS**",
+    "        **𝗩𝗢𝗟𝗗𝗬𝗦𝗘𝗟𝗙 | WALLETS**",
     "╚══════════════════════════════╝",
     ""
     ]
@@ -4696,7 +4696,7 @@ def ensure_download_temp_dir ():
         return "/tmp"
 
 def get_antidelete_base_dir (uid =None ):
-    base =os .path .join ("darkself_antidelete_media",str (uid ))if uid else "darkself_antidelete_media"
+    base =os .path .join ("voldyself_antidelete_media",str (uid ))if uid else "voldyself_antidelete_media"
     try :
         os .makedirs (base ,exist_ok =True )
     except Exception :
@@ -4706,7 +4706,7 @@ def get_antidelete_base_dir (uid =None ):
 def prune_antidelete_disk_cache (max_mb =None ,max_age =None ):
     max_mb =int (max_mb or ANTI_DELETE_DISK_LIMIT_MB )
     max_age =int (max_age or ANTI_DELETE_MEDIA_TTL_SECONDS )
-    base ="darkself_antidelete_media"
+    base ="voldyself_antidelete_media"
     try :
         if not os .path .isdir (base ):
             return 
@@ -5489,7 +5489,7 @@ async def extra_fun_controller (client ,message ):
 
     raw_cmd =get_cmd (uid ,message .text )
     if not raw_cmd :
-        raw_cmd =getattr (message ,"_darkself_fun_cmd",None )
+        raw_cmd =getattr (message ,"_voldyself_fun_cmd",None )
     if not raw_cmd :
         return 
     cmd =raw_cmd .lower ()
@@ -5565,7 +5565,7 @@ async def fun_controller (client ,message ):
 
     raw_cmd =get_cmd (uid ,message .text )
     if not raw_cmd :
-        raw_cmd =getattr (message ,"_darkself_fun_cmd",None )
+        raw_cmd =getattr (message ,"_voldyself_fun_cmd",None )
     if not raw_cmd :
         return 
     cmd =raw_cmd .lower ()
@@ -5613,10 +5613,10 @@ async def fun_controller (client ,message ):
         mapped =alias .get (sub )
         if mapped :
             try :
-                setattr (message ,"_darkself_fun_cmd",mapped )
+                setattr (message ,"_voldyself_fun_cmd",mapped )
                 await extra_fun_controller (client ,message )
             finally :
-                try :delattr (message ,"_darkself_fun_cmd")
+                try :delattr (message ,"_voldyself_fun_cmd")
                 except Exception :pass 
         return 
 
@@ -5651,10 +5651,10 @@ async def game_cheat_controller (client ,message ):
     thread_id =getattr (message ,"message_thread_id",None )or getattr (message ,"reply_to_top_message_id",None )
     effective_reply_id =reply_id or thread_id 
 
-    lock =getattr (client ,"_darkself_game_roll_lock",None )
+    lock =getattr (client ,"_voldyself_game_roll_lock",None )
     if lock is None :
         lock =asyncio .Lock ()
-        setattr (client ,"_darkself_game_roll_lock",lock )
+        setattr (client ,"_voldyself_game_roll_lock",lock )
     if lock .locked ():
         logger .info ("Game already running for %s; duplicate ignored",uid )
         return 
@@ -5757,10 +5757,10 @@ async def session_export_controller (client ,message ):
     if get_cmd (owner .id ,getattr (message ,"text",None ))!="سشن":
         return 
 
-    lock =getattr (client ,"_darkself_session_export_lock",None )
+    lock =getattr (client ,"_voldyself_session_export_lock",None )
     if lock is None :
         lock =asyncio .Lock ()
-        setattr (client ,"_darkself_session_export_lock",lock )
+        setattr (client ,"_voldyself_session_export_lock",lock )
     if lock .locked ():
         return 
     async with lock :
@@ -5876,7 +5876,7 @@ def build_action_panel_markup_json (owner_uid :int ,chat_id :int ,target_id :int
 def build_action_panel_text (owner_uid :int ,chat_id :int ,target_id :int ):
     return (
     "╔══════════════════════════════╗\n"
-    "        **𝗗𝗔𝗥𝗞𝗦𝗘𝗟𝗙 | ACTION**\n"
+    "        **𝗩𝗢𝗟𝗗𝗬𝗦𝗘𝗟𝗙 | ACTION**\n"
     "╚══════════════════════════════╝\n\n"
     f"`USER` `{target_id }`\n"
     f"`CHAT` `{chat_id }`\n\n"
@@ -6325,7 +6325,7 @@ def make_basic_search_answer (query ):
 def build_dental_answer (query :str )->str :
     return (
     f"╔══════════════════════════════╗\n"
-    f"        **𝗗𝗔𝗥𝗞𝗦𝗘𝗟𝗙 | SEARCH**\n"
+    f"        **𝗩𝗢𝗟𝗗𝗬𝗦𝗘𝗟𝗙 | SEARCH**\n"
     f"╚══════════════════════════════╝\n\n"
     f"**موضوع:** `{query }`\n\n"
     f"**متن دقیق برای مطالعه:**\n"
@@ -6392,7 +6392,7 @@ async def search_topic_controller (client ,message ):
 
         text =(
         f"╔══════════════════════════════╗\n"
-        f"        **𝗗𝗔𝗥𝗞𝗦𝗘𝗟𝗙 | SEARCH**\n"
+        f"        **𝗩𝗢𝗟𝗗𝗬𝗦𝗘𝗟𝗙 | SEARCH**\n"
         f"╚══════════════════════════════╝\n\n"
         f"**موضوع:** `{query }`\n\n"
         f"**متن پیشنهادی برای مطالعه:**\n{summary }"
@@ -6862,7 +6862,7 @@ def build_datetime_answer (now :datetime ,mode :str ="تاریخ")->str :
 
     return (
     f"╔══════════════════════════════╗\n"
-    f"        **𝗗𝗔𝗥𝗞𝗦𝗘𝗟𝗙 | {title }**\n"
+    f"        **𝗩𝗢𝗟𝗗𝗬𝗦𝗘𝗟𝗙 | {title }**\n"
     f"╚══════════════════════════════╝\n\n"
     f"🕰 **ساعت تهران:** `{time_24 }`\n"
     f"⌚️ **فرمت ۱۲ ساعته:** `{time_12 }`\n"
@@ -6981,7 +6981,7 @@ def build_backup_html (chat_title :str ,messages :list ,self_id :int ,exported_a
 </style>
 </head>
 <body>
-<div class="header"><div class="brand">DARKSELF BACKUP</div><div class="title">{esc_title }</div><div class="meta">تعداد پیام‌ها: {count_text }<br>زمان بکاپ: {exported_text } Asia/Tehran</div></div>
+<div class="header"><div class="brand">VOLDYSELF BACKUP</div><div class="title">{esc_title }</div><div class="meta">تعداد پیام‌ها: {count_text }<br>زمان بکاپ: {exported_text } Asia/Tehran</div></div>
 <div class="chat">''']
     last_day =None 
     for msg in messages :
@@ -7015,7 +7015,7 @@ def build_backup_html (chat_title :str ,messages :list ,self_id :int ,exported_a
         elif not media :
             parts .append ('<span class="empty">پیام بدون متن</span>')
         parts .append (f'<span class="time">{html .escape (time_s )}</span></div></div>')
-    parts .append ('<div class="footer">Backup generated by DARKSELF</div></div></body></html>')
+    parts .append ('<div class="footer">Backup generated by VOLDYSELF</div></div></body></html>')
     return "".join (parts )
 
 async def create_chat_backup_file (client ,chat_id ,limit :int =BACKUP_MESSAGE_LIMIT ):
@@ -7115,7 +7115,7 @@ async def ping_controller (client ,message ):
             await asyncio .sleep (0 )
         ping_ms =round ((time .perf_counter ()-t0 )*1000 )
         txt =(
-        "╔═══════ ✦ 𝗗𝗔𝗥𝗞𝗦𝗘𝗟𝗙 ✦ ═══════╗\n"
+        "╔═══════ ✦ 𝗩𝗢𝗟𝗗𝗬𝗦𝗘𝗟𝗙 ✦ ═══════╗\n"
         "              PING\n"
         "╚══════════════════════════════╝\n\n"
         f"◉  `{ping_ms }ms`"
@@ -8054,7 +8054,7 @@ async def sync_sessions_from_database (reason :str ="database-sync"):
                 session_string =s_data .get ("string")or s_data .get ("session_string")
                 activation_id =data_manager .data .get ("users",{}).get (str (uid ),{}).get ("activation_id")
                 active =ACTIVE_BOTS .get (uid )
-                if active and activation_id and getattr (active [0 ],"_darkself_activation_id",None )!=activation_id :
+                if active and activation_id and getattr (active [0 ],"_voldyself_activation_id",None )!=activation_id :
                     await stop_user_bot (uid )
                     load_all_states ()
                 if not session_string or uid in ACTIVE_BOTS or uid in STARTING_BOTS :
@@ -8315,13 +8315,13 @@ async def _bulk_wait_for_limit (client ,uid ):
     if ACCOUNT_MAINTENANCE_LIMIT_KIND .get (uid )=="restricted":
         raise _MaintenancePaused ("account-restricted")
     delay =max (0 ,ACCOUNT_MAINTENANCE_AFTER .get (uid ,0 )-time .monotonic ())
-    progress =getattr (client ,"_darkself_maintenance_progress",{})
+    progress =getattr (client ,"_voldyself_maintenance_progress",{})
     progress ["state"]="waiting"
     progress ["waits"]=progress .get ("waits",0 )+1 
     progress ["wait_until"]=time .time ()+delay 
     now =time .monotonic ()
-    if now -getattr (client ,"_darkself_bulk_pause_notice_at",-1000000 )>=60 :
-        client ._darkself_bulk_pause_notice_at =now 
+    if now -getattr (client ,"_voldyself_bulk_pause_notice_at",-1000000 )>=60 :
+        client ._voldyself_bulk_pause_notice_at =now 
         await _maintenance_note (client ,f"<b>پاکسازی در حال مکث است، نه لغو.</b>\nتلگرام درخواست صبر داده است؛ حدود {math .ceil (delay )} ثانیه.\nبعد از پایان این زمان، عملیات خودکار ادامه پیدا می‌کند.\nبرای لغو: «توقف پاکسازی»")
     while True :
         if not SELF_ACTIVE_STATUS .get (uid ,True ):raise _MaintenancePaused ("inactive")
@@ -8411,7 +8411,7 @@ async def _maintenance_dialog_chats (client ):
 async def _run_bulk_cleanup (client ,uid ,kind ,max_items =None ):
     
     stats ={"selected":0 ,"attempted":0 ,"completed":0 ,"blocked":0 ,"skipped":0 ,"failed":0 ,"stopped":False ,"waits":0 ,"state":"running","stop_reason":""}
-    client ._darkself_maintenance_progress =stats 
+    client ._voldyself_maintenance_progress =stats 
     pending_departures =set ()
     try :
         targets ={chat .id :chat for chat in await _bulk_dialog_snapshot (client ,uid )if _bulk_chat_matches (chat ,kind )}
@@ -8560,7 +8560,7 @@ def _is_membership_prompt (message ):
 async def _run_membership_join (client ,uid ,prompt ):
     
     stats ={"joined":0 ,"already":0 ,"requested":0 ,"skipped":0 ,"failed":0 ,"stopped":False ,"verification_sent":False }
-    client ._darkself_maintenance_progress =stats 
+    client ._voldyself_maintenance_progress =stats 
     sender =getattr (prompt ,"from_user",None )
     if not sender or not getattr (sender ,"is_bot",False )or prompt .chat .id !=sender .id or not _is_membership_prompt (prompt ):return stats 
     for kind ,value in _membership_targets (prompt ):
@@ -8629,7 +8629,7 @@ async def _run_membership_join (client ,uid ,prompt ):
     return stats 
 
 async def _launch_account_maintenance (client ,uid ,factory ,title ,resume_on_flood =False ):
-    running =getattr (client ,"_darkself_maintenance_task",None )
+    running =getattr (client ,"_voldyself_maintenance_task",None )
     if running and not running .done ():
         return await _maintenance_note (client ,"یک عملیات در حال اجراست. برای توقف، «توقف پاکسازی» را ارسال کن.")
     wait_left =ACCOUNT_MAINTENANCE_AFTER .get (uid ,0 )-time .monotonic ()
@@ -8655,7 +8655,7 @@ async def _launch_account_maintenance (client ,uid ,factory ,title ,resume_on_fl
         except asyncio .CancelledError :raise 
         except Exception as exc :logger .warning ("Maintenance worker failed for %s: %s",uid ,type (exc ).__name__ )
     task =asyncio .create_task (runner ())
-    client ._darkself_maintenance_task =task 
+    client ._voldyself_maintenance_task =task 
     pair =ACTIVE_BOTS .get (uid )
     if pair :
         pair [1 ].append (task )
@@ -8670,7 +8670,7 @@ async def bulk_cleanup_controller (client ,message ):
     if getattr (message ,"forward_date",None )or getattr (message ,"via_bot",None ):return 
     cmd =re .sub (r"\s+"," ",(get_cmd (uid ,message .text )or "").replace ("‌"," ")).strip ()
     if cmd =="توقف پاکسازی":
-        task =getattr (client ,"_darkself_maintenance_task",None )
+        task =getattr (client ,"_voldyself_maintenance_task",None )
         if task and not task .done ():
             task .cancel ()
             try :await task 
@@ -8832,7 +8832,7 @@ async def _get_private_channel_dialogs (uid :int ,limit :int =30 ):
 
 def _private_channel_home_text (uid :int ,count :int =0 )->str :
     return (
-    "╔══════ ✦ 𝗗𝗔𝗥𝗞𝗦𝗘𝗟𝗙 ✦ ══════╗\n"
+    "╔══════ ✦ 𝗩𝗢𝗟𝗗𝗬𝗦𝗘𝗟𝗙 ✦ ══════╗\n"
     "        سیو کانال خصوصی\n"
     "╚══════════════════════════╝\n\n"
     f"USER `{uid }`\n"
@@ -8853,7 +8853,7 @@ def _private_channel_home_markup_json (uid :int ,channels ):
 
 def _private_channel_count_text (uid :int ,chat_id :int ,title :str )->str :
     return (
-    "╔══════ ✦ 𝗗𝗔𝗥𝗞𝗦𝗘𝗟𝗙 ✦ ══════╗\n"
+    "╔══════ ✦ 𝗩𝗢𝗟𝗗𝗬𝗦𝗘𝗟𝗙 ✦ ══════╗\n"
     "        انتخاب تعداد ذخیره\n"
     "╚══════════════════════════╝\n\n"
     f"کانال: {title }\n\n"
@@ -9117,18 +9117,18 @@ async def source_controller (client ,message ):
     lines =raw .count ("\n")+1
     size =len (raw .encode ("utf-8"))
     stamp =datetime .now (TEHRAN_TIMEZONE ).strftime ("%Y-%m-%d_%H-%M")
-    out =os .path .join (tempfile .gettempdir (),f"darkself_{stamp }.py")
+    out =os .path .join (tempfile .gettempdir (),f"voldyself_{stamp }.py")
     try :
         with open (out ,"w",encoding ="utf-8")as fh :
             fh .write (raw )
-        cap =("✦ **𝗗𝗔𝗥𝗞𝗦𝗘𝗟𝗙** ✦  ·  SOURCE\n"
+        cap =("✦ **𝗩𝗢𝗟𝗗𝗬𝗦𝗘𝗟𝗙** ✦  ·  SOURCE\n"
         "━━━━━━━━━━━━━━━━━━\n"
         f"◈ خط      `{lines :,}`\n"
         f"◈ حجم     `{size //1024 :,}` کیلوبایت\n"
         f"◈ تاریخ   `{stamp .replace ('_',' ')}`\n"
         "━━━━━━━━━━━━━━━━━━\n"
         "✧ آخرین نسخه، مستقیم از سرور")
-        await client .send_document ("me",out ,caption =cap ,file_name =f"darkself_{stamp }.py")
+        await client .send_document ("me",out ,caption =cap ,file_name =f"voldyself_{stamp }.py")
         try :
             await message .delete ()
         except Exception :
@@ -9381,7 +9381,7 @@ async def ai_controller (client ,message ):
         return await safe_edit_message (target ,"**هوش مصنوعی جواب نداد، دوباره بزن.**")
     _ai_remember (uid ,chat_id ,question ,answer )
     answer =answer .strip ()
-    head ="✦ **𝗗𝗔𝗥𝗞𝗦𝗘𝗟𝗙** ✦  ·  AI\n━━━━━━━━━━━━━━━━━━\n"
+    head ="✦ **𝗩𝗢𝗟𝗗𝗬𝗦𝗘𝗟𝗙** ✦  ·  AI\n━━━━━━━━━━━━━━━━━━\n"
     body =answer if len (answer )<3500 else answer [:3500 ]+" ..."
     await safe_edit_message (target ,head +body )
 
@@ -9498,7 +9498,7 @@ def _fx_pick (data ,item ):
 
 def _fx_card (item ,info ,qty ):
     arrow ="▲"if info ["dt"]=="high"else ("▼"if info ["dt"]=="low"else "•")
-    head ="✦ **𝗗𝗔𝗥𝗞𝗦𝗘𝗟𝗙** ✦  ·  LIVE RATE\n──────────────\n"
+    head ="✦ **𝗩𝗢𝗟𝗗𝗬𝗦𝗘𝗟𝗙** ✦  ·  LIVE RATE\n──────────────\n"
     body ="◈ **{}**  ·  {}\n".format (item [4 ],item [5 ])
     if info ["toman"]>0 :
         body +="✦ `{}` تومان\n".format (_fx_money (info ["toman"]))
@@ -9512,7 +9512,7 @@ def _fx_card (item ,info ,qty ):
 def _fx_board (data ):
     rows =[("دلار","price_dollar_rl","دلار"),("یورو","price_eur","یورو"),
     ("طلا","geram18","طلای 18"),("سکه","sekee","سکه امامی"),("تتر","crypto-tether-irr","تتر")]
-    out ="✦ **𝗗𝗔𝗥𝗞𝗦𝗘𝗟𝗙** ✦  ·  LIVE BOARD\n──────────────\n"
+    out ="✦ **𝗩𝗢𝗟𝗗𝗬𝗦𝗘𝗟𝗙** ✦  ·  LIVE BOARD\n──────────────\n"
     stamp =""
     for name ,key ,label in rows :
         row =(data ["tg"]or {}).get (key )or {}
@@ -11385,7 +11385,7 @@ async def pemoji_premium_bot_start (token ):
         PREMIUM_BOT_USERNAME =""
     if not token :
         return None
-    c =Client ("pemoji_premium",api_id =API_ID ,api_hash =API_HASH ,bot_token =token ,in_memory =True ,workers =1 ,**_darkself_optional_client_kwargs ())
+    c =Client ("pemoji_premium",api_id =API_ID ,api_hash =API_HASH ,bot_token =token ,in_memory =True ,workers =1 ,**_voldyself_optional_client_kwargs ())
     c .add_handler (InlineQueryHandler (pemoji_premium_inline ),group =0 )
     c .add_handler (CallbackQueryHandler (pemoji_pick_callback ),group =0 )
     c .add_handler (RawUpdateHandler (pemoji_inline_send_watcher ),group =37 )
@@ -11738,7 +11738,7 @@ def _pemoji_norm_digit (s ):
 
 def _pemoji_build_list (uid ):
     pmap =_pemoji_map (uid )
-    text ="𝗗𝗔𝗥𝗞𝗦𝗘𝗟𝗙  ·  PREMIUM EMOJI\n──────────────"
+    text ="𝗩𝗢𝗟𝗗𝗬𝗦𝗘𝗟𝗙  ·  PREMIUM EMOJI\n──────────────"
     entities =[]
     for i ,(ch ,doc )in enumerate (pmap .items (),1 ):
         try :
@@ -12774,7 +12774,7 @@ def _activation_wait_left (uid )->float :
         return 0.0 
 
 async def activation_update_guard (client ,update ,users ,chats ):
-    uid =client ._extract_darkself_uid ()
+    uid =client ._extract_voldyself_uid ()
     if _activation_wait_left (uid )>0 :raise StopPropagation 
 
 async def _notify_activation_result (uid ,activation_id ,ready ):
@@ -12785,7 +12785,7 @@ async def _notify_activation_result (uid ,activation_id ,ready ):
     if not ready and data .get ("activation_failure_notified",False ):return 
     if ready :
         prefix ="."if data .get ("settings",{}).get ("dot_commands",False )else ""
-        text =("<b>✦ 𝗗𝗔𝗥𝗞𝗦𝗘𝗟𝗙 ✦</b>\n"
+        text =("<b>✦ 𝗩𝗢𝗟𝗗𝗬𝗦𝗘𝗟𝗙 ✦</b>\n"
         "━━━━━━━━━━━━━━━━━━\n"
         "<b>◈ سلف فعال شد</b>\n\n"
         "اتصال برقرار است و همه‌چیز آماده‌ست.\n"
@@ -12793,7 +12793,7 @@ async def _notify_activation_result (uid ,activation_id ,ready ):
         "━━━━━━━━━━━━━━━━━━\n"
         "✧ خوش اومدی")
     else :
-        text =("<b>✦ 𝗗𝗔𝗥𝗞𝗦𝗘𝗟𝗙 ✦</b>\n"
+        text =("<b>✦ 𝗩𝗢𝗟𝗗𝗬𝗦𝗘𝗟𝗙 ✦</b>\n"
         "━━━━━━━━━━━━━━━━━━\n"
         "<b>◈ اتصال برقرار نشد</b>\n\n"
         "کمی بعد دکمهٔ «فعال‌سازی سلف» را بزن.\n"
@@ -12925,7 +12925,7 @@ async def start_bot_instance (session_string ,phone ,uid ,font ,_retry_count =0 
         if activation_id :
             if _db_decrypt (data .get ("session_string","")or "")!=session_string :return 
             active =ACTIVE_BOTS .get (uid )
-            if active and getattr (active [0 ],"_darkself_activation_id",None )!=activation_id :
+            if active and getattr (active [0 ],"_voldyself_activation_id",None )!=activation_id :
                 await stop_user_bot (uid )
                 load_all_states ()
             while _activation_wait_left (uid )>0 :
@@ -13004,7 +13004,7 @@ async def _start_bot_instance_now_impl (session_string ,phone ,uid ,font ,_retry
     **client_fp 
     )
 
-    client ._darkself_activation_id =data_manager .data .get ("users",{}).get (str (uid ),{}).get ("activation_id")
+    client ._voldyself_activation_id =data_manager .data .get ("users",{}).get (str (uid ),{}).get ("activation_id")
     client .add_handler (RawUpdateHandler (activation_update_guard ),group =-1000 )
     client .add_handler (MessageHandler (wallet_controller ,filters .me &filters .text ),group =-4 )
     client .add_handler (MessageHandler (root_ban_reply_controller ,filters .me &filters .text ),group =-4 )
@@ -13194,7 +13194,7 @@ def _panel_caption (uid ):
         pass
     on ,off =_panel_stats (uid )
     return (
-    "✦ **𝗗𝗔𝗥𝗞𝗦𝗘𝗟𝗙** ✦  ·  CONTROL\n"
+    "✦ **𝗩𝗢𝗟𝗗𝗬𝗦𝗘𝗟𝗙** ✦  ·  CONTROL\n"
     "━━━━━━━━━━━━━━━━━━\n"
     f"◈ کاربر    `{uid }`\n"
     f"◈ وضعیت    {st }\n"
@@ -13494,7 +13494,7 @@ async def _ui_edit_caption (client ,inline_id ,text ,markup_json ,markup ):
         return False
 
 HELP_HOME_TEXT ="""
-**𝗗𝗔𝗥𝗞𝗦𝗘𝗟𝗙**  ·  مرکز راهنما
+**𝗩𝗢𝗟𝗗𝗬𝗦𝗘𝗟𝗙**  ·  مرکز راهنما
 ──────────────────
 
 یک دسته را از منوی زیر انتخاب کنید.
@@ -13504,7 +13504,7 @@ HELP_SECTIONS ={
 "toolsmath":{
 "title":"ابزار · ریاضی و متن",
 "text":"""
-✦ **𝗗𝗔𝗥𝗞𝗦𝗘𝗟𝗙** ✦  ·  TOOLS · MATH & TEXT
+✦ **𝗩𝗢𝗟𝗗𝗬𝗦𝗘𝗟𝗙** ✦  ·  TOOLS · MATH & TEXT
 ━━━━━━━━━━━━━━━━━━
 
 دستورهای زیر با `/` یا `.` کار می‌کنند (مثال: `/calc 2+2`).
@@ -13519,7 +13519,7 @@ HELP_SECTIONS ={
 "toolshash":{
 "title":"ابزار · رمز و داده",
 "text":"""
-✦ **𝗗𝗔𝗥𝗞𝗦𝗘𝗟𝗙** ✦  ·  TOOLS · HASH & DATA
+✦ **𝗩𝗢𝗟𝗗𝗬𝗦𝗘𝗟𝗙** ✦  ·  TOOLS · HASH & DATA
 ━━━━━━━━━━━━━━━━━━
 
 `/md5` ·  `/sha1` ·  `/sha256` ·  `/sha512` [متن]  —  هش کردن
@@ -13531,7 +13531,7 @@ HELP_SECTIONS ={
 "toolstime":{
 "title":"ابزار · زمان و مکان",
 "text":"""
-✦ **𝗗𝗔𝗥𝗞𝗦𝗘𝗟𝗙** ✦  ·  TOOLS · TIME & PLACE
+✦ **𝗩𝗢𝗟𝗗𝗬𝗦𝗘𝗟𝗙** ✦  ·  TOOLS · TIME & PLACE
 ━━━━━━━━━━━━━━━━━━
 
 `/date`  —  تاریخ شمسی/میلادی
@@ -13545,7 +13545,7 @@ HELP_SECTIONS ={
 "toolsinfo":{
 "title":"ابزار · اطلاعات",
 "text":"""
-✦ **𝗗𝗔𝗥𝗞𝗦𝗘𝗟𝗙** ✦  ·  TOOLS · INFO
+✦ **𝗩𝗢𝗟𝗗𝗬𝗦𝗘𝗟𝗙** ✦  ·  TOOLS · INFO
 ━━━━━━━━━━━━━━━━━━
 
 `/userinfo` یا `/whois` [ریپلای یا @یوزرنیم]  —  اطلاعات کاربر
@@ -13558,7 +13558,7 @@ HELP_SECTIONS ={
 "toolsmedia":{
 "title":"ابزار · رسانه",
 "text":"""
-✦ **𝗗𝗔𝗥𝗞𝗦𝗘𝗟𝗙** ✦  ·  TOOLS · MEDIA
+✦ **𝗩𝗢𝗟𝗗𝗬𝗦𝗘𝗟𝗙** ✦  ·  TOOLS · MEDIA
 ━━━━━━━━━━━━━━━━━━
 
 `/qr [متن]`  —  ساخت QR کد
@@ -13574,7 +13574,7 @@ HELP_SECTIONS ={
 "toolsai":{
 "title":"ابزار · هوش و دیگر",
 "text":"""
-✦ **𝗗𝗔𝗥𝗞𝗦𝗘𝗟𝗙** ✦  ·  TOOLS · AI & MISC
+✦ **𝗩𝗢𝗟𝗗𝗬𝗦𝗘𝗟𝗙** ✦  ·  TOOLS · AI & MISC
 ━━━━━━━━━━━━━━━━━━
 
 `/ai [سوال]`  —  هوش مصنوعی (ابزار جدا از `هوش`)
@@ -13586,7 +13586,7 @@ HELP_SECTIONS ={
 "downloader":{
 "title":"دانلودر",
 "text":"""
-✦ **𝗗𝗔𝗥𝗞𝗦𝗘𝗟𝗙** ✦  ·  DOWNLOADER
+✦ **𝗩𝗢𝗟𝗗𝗬𝗦𝗘𝗟𝗙** ✦  ·  DOWNLOADER
 ━━━━━━━━━━━━━━━━━━
 
 `دانلود [لینک]`  ·  `ویدیو [لینک]`  ·  `dl [لینک]`  —  دانلود ویدیو
@@ -13597,19 +13597,25 @@ HELP_SECTIONS ={
 "selfloop":{
 "title":"ارسال خودکار (سلف میو)",
 "text":"""
-✦ **𝗗𝗔𝗥𝗞𝗦𝗘𝗟𝗙** ✦  ·  AUTO LOOP
+✦ **𝗩𝗢𝗟𝗗𝗬𝗦𝗘𝗟𝗙** ✦  ·  AUTO LOOP
 ━━━━━━━━━━━━━━━━━━
 
-`/self_on`  —  روشن در همین چت (پیش‌فرض هر ۵ دقیقه)
-`/self_on [زمان] [متن]`  —  مثل `/self_on 10m سلام`
-`/self_off`  —  خاموش در همین چت
-`/self_status`  —  فهرست چت‌های فعال
+هر چت می‌تواند چند پیام خودکار مستقل (اسلات) داشته باشد، هرکدام با زمان و متن خودش.
+
+`/self_on`  —  اسلات ۱، پیش‌فرض (هر ۵ دقیقه، متن «میو»)
+`/self_on [زمان] [متن]`  —  اسلات ۱ با زمان/متن دلخواه
+`/self_on 2: [زمان] [متن]`  —  اسلات ۲، جدا از اسلات ۱ (تا ۵ اسلات در هر چت)
+مثال: `/self_on 2: 2m یخچال میویی`
+
+`/self_off`  —  خاموش‌کردن همه‌ی اسلات‌های همین چت
+`/self_off [شماره]`  —  خاموش‌کردن فقط همان اسلات
+`/self_status`  —  فهرست همه‌ی چت‌ها و اسلات‌های فعال
 """.strip()
 },
 "meowgame":{
 "title":"بازی میو",
 "text":"""
-✦ **𝗗𝗔𝗥𝗞𝗦𝗘𝗟𝗙** ✦  ·  MEOW GAME
+✦ **𝗩𝗢𝗟𝗗𝗬𝗦𝗘𝗟𝗙** ✦  ·  MEOW GAME
 ━━━━━━━━━━━━━━━━━━
 
 `میو روشن`  ·  `میو خاموش`  —  فعال‌سازی بازی در یک چت
@@ -13622,7 +13628,7 @@ HELP_SECTIONS ={
 "main":{
 "title":"دستورات اصلی",
 "text":"""
-✦ **𝗗𝗔𝗥𝗞𝗦𝗘𝗟𝗙** ✦  ·  CORE
+✦ **𝗩𝗢𝗟𝗗𝗬𝗦𝗘𝗟𝗙** ✦  ·  CORE
 ━━━━━━━━━━━━━━━━━━
 
 `پنل`  —  باز کردن پنل کنترل
@@ -13637,7 +13643,7 @@ HELP_SECTIONS ={
 "wallet":{
 "title":"کیف پول",
 "text":"""
-✦ **𝗗𝗔𝗥𝗞𝗦𝗘𝗟𝗙** ✦  ·  WALLET
+✦ **𝗩𝗢𝗟𝗗𝗬𝗦𝗘𝗟𝗙** ✦  ·  WALLET
 ━━━━━━━━━━━━━━━━━━
 
 `تنظیم ولت تتر [آدرس]`
@@ -13654,7 +13660,7 @@ HELP_SECTIONS ={
 "backup":{
 "title":"پشتیبان‌گیری",
 "text":"""
-✦ **𝗗𝗔𝗥𝗞𝗦𝗘𝗟𝗙** ✦  ·  BACKUP
+✦ **𝗩𝗢𝗟𝗗𝗬𝗦𝗘𝗟𝗙** ✦  ·  BACKUP
 ━━━━━━━━━━━━━━━━━━
 
 `بکاپ`  —  فایل HTML از ۲۰۰۰ پیام آخر
@@ -13667,7 +13673,7 @@ HELP_SECTIONS ={
 "datetime":{
 "title":"تاریخ و ساعت",
 "text":"""
-✦ **𝗗𝗔𝗥𝗞𝗦𝗘𝗟𝗙** ✦  ·  DATE / TIME
+✦ **𝗩𝗢𝗟𝗗𝗬𝗦𝗘𝗟𝗙** ✦  ·  DATE / TIME
 ━━━━━━━━━━━━━━━━━━
 
 `ساعت`  —  ساعت تهران و روز هفته
@@ -13677,7 +13683,7 @@ HELP_SECTIONS ={
 "panel":{
 "title":"پنل کنترل",
 "text":"""
-✦ **𝗗𝗔𝗥𝗞𝗦𝗘𝗟𝗙** ✦  ·  PANEL
+✦ **𝗩𝗢𝗟𝗗𝗬𝗦𝗘𝗟𝗙** ✦  ·  PANEL
 ━━━━━━━━━━━━━━━━━━
 
 `پنل`  —  مرکز کنترل دکمه‌ای
@@ -13694,7 +13700,7 @@ HELP_SECTIONS ={
 "group":{
 "title":"مدیریت گروه",
 "text":"""
-✦ **𝗗𝗔𝗥𝗞𝗦𝗘𝗟𝗙** ✦  ·  GROUP
+✦ **𝗩𝗢𝗟𝗗𝗬𝗦𝗘𝗟𝗙** ✦  ·  GROUP
 ━━━━━━━━━━━━━━━━━━
 
 `تگ`  —  تگ اعضای دارای یوزرنیم
@@ -13710,7 +13716,7 @@ HELP_SECTIONS ={
 "reply":{
 "title":"ابزار ریپلای",
 "text":"""
-✦ **𝗗𝗔𝗥𝗞𝗦𝗘𝗟𝗙** ✦  ·  REPLY
+✦ **𝗩𝗢𝗟𝗗𝗬𝗦𝗘𝗟𝗙** ✦  ·  REPLY
 ━━━━━━━━━━━━━━━━━━
 
 `دانلود`  —  دانلود مدیا به ذخیره‌شده‌ها
@@ -13726,7 +13732,7 @@ HELP_SECTIONS ={
 "react":{
 "title":"ری‌اکشن",
 "text":"""
-✦ **𝗗𝗔𝗥𝗞𝗦𝗘𝗟𝗙** ✦  ·  REACTION
+✦ **𝗩𝗢𝗟𝗗𝗬𝗦𝗘𝗟𝗙** ✦  ·  REACTION
 ━━━━━━━━━━━━━━━━━━
 
 `ریاکت [ایموجی]`  —  ثبت ری‌اکشن خودکار
@@ -13738,7 +13744,7 @@ HELP_SECTIONS ={
 "profile":{
 "title":"پروفایل",
 "text":"""
-✦ **𝗗𝗔𝗥𝗞𝗦𝗘𝗟𝗙** ✦  ·  PROFILE
+✦ **𝗩𝗢𝗟𝗗𝗬𝗦𝗘𝗟𝗙** ✦  ·  PROFILE
 ━━━━━━━━━━━━━━━━━━
 
 `تنظیم نام اکانت [نام]`
@@ -13755,7 +13761,7 @@ HELP_SECTIONS ={
 "create":{
 "title":"ساخت و حذف",
 "text":"""
-✦ **𝗗𝗔𝗥𝗞𝗦𝗘𝗟𝗙** ✦  ·  CREATE
+✦ **𝗩𝗢𝗟𝗗𝗬𝗦𝗘𝗟𝗙** ✦  ·  CREATE
 ━━━━━━━━━━━━━━━━━━
 
 `ساخت گروه [اسم]`
@@ -13774,7 +13780,7 @@ HELP_SECTIONS ={
 "lists":{
 "title":"لیست‌ها",
 "text":"""
-✦ **𝗗𝗔𝗥𝗞𝗦𝗘𝗟𝗙** ✦  ·  LISTS
+✦ **𝗩𝗢𝗟𝗗𝗬𝗦𝗘𝗟𝗙** ✦  ·  LISTS
 ━━━━━━━━━━━━━━━━━━
 
 **افزودن/حذف تارگت** (با ریپلای روی پیام کاربر)
@@ -13805,7 +13811,7 @@ HELP_SECTIONS ={
 "wordfilter":{
 "title":"فیلتر کلمات",
 "text":"""
-✦ **𝗗𝗔𝗥𝗞𝗦𝗘𝗟𝗙** ✦  ·  WORD FILTER
+✦ **𝗩𝗢𝗟𝗗𝗬𝗦𝗘𝗟𝗙** ✦  ·  WORD FILTER
 ━━━━━━━━━━━━━━━━━━
 
 `تنظیم فیلتر کلمات [متن]`
@@ -13818,7 +13824,7 @@ HELP_SECTIONS ={
 "secretary":{
 "title":"منشی خودکار",
 "text":"""
-✦ **𝗗𝗔𝗥𝗞𝗦𝗘𝗟𝗙** ✦  ·  SECRETARY
+✦ **𝗩𝗢𝗟𝗗𝗬𝗦𝗘𝗟𝗙** ✦  ·  SECRETARY
 ━━━━━━━━━━━━━━━━━━
 
 `تنظیم منشی [متن]`  —  پاسخ خودکار ثابت
@@ -13828,7 +13834,7 @@ HELP_SECTIONS ={
 "fjoin":{
 "title":"عضویت اجباری",
 "text":"""
-✦ **𝗗𝗔𝗥𝗞𝗦𝗘𝗟𝗙** ✦  ·  FORCED JOIN
+✦ **𝗩𝗢𝗟𝗗𝗬𝗦𝗘𝗟𝗙** ✦  ·  FORCED JOIN
 ━━━━━━━━━━━━━━━━━━
 
 `تنظیم عضویت اجباری @username`
@@ -13839,7 +13845,7 @@ HELP_SECTIONS ={
 "privatechan":{
 "title":"سیو کانال خصوصی",
 "text":"""
-✦ **𝗗𝗔𝗥𝗞𝗦𝗘𝗟𝗙** ✦  ·  PRIVATE CHANNEL SAVE
+✦ **𝗩𝗢𝗟𝗗𝗬𝗦𝗘𝗟𝗙** ✦  ·  PRIVATE CHANNEL SAVE
 ━━━━━━━━━━━━━━━━━━
 
 `سیو کانال خصوصی`
@@ -13849,7 +13855,7 @@ HELP_SECTIONS ={
 "media":{
 "title":"رسانه و جستجو",
 "text":"""
-✦ **𝗗𝗔𝗥𝗞𝗦𝗘𝗟𝗙** ✦  ·  MEDIA
+✦ **𝗩𝗢𝗟𝗗𝗬𝗦𝗘𝗟𝗙** ✦  ·  MEDIA
 ━━━━━━━━━━━━━━━━━━
 
 `عکس [متن]`  —  جستجو و ارسال تصویر
@@ -13862,7 +13868,7 @@ HELP_SECTIONS ={
 "cheat":{
 "title":"بازی و سرگرمی",
 "text":"""
-✦ **𝗗𝗔𝗥𝗞𝗦𝗘𝗟𝗙** ✦  ·  GAME
+✦ **𝗩𝗢𝗟𝗗𝗬𝗦𝗘𝗟𝗙** ✦  ·  GAME
 ━━━━━━━━━━━━━━━━━━
 
 `تاس [1-6]`  —  تاس تا رسیدن به عدد
@@ -13876,7 +13882,7 @@ HELP_SECTIONS ={
 "fun":{
 "title":"فان و افکت",
 "text":"""
-✦ **𝗗𝗔𝗥𝗞𝗦𝗘𝗟𝗙** ✦  ·  FUN
+✦ **𝗩𝗢𝗟𝗗𝗬𝗦𝗘𝗟𝗙** ✦  ·  FUN
 ━━━━━━━━━━━━━━━━━━
 
 `قلب`  —  لودینگ قلبی ۰ تا ۱۰۰
@@ -13887,7 +13893,7 @@ HELP_SECTIONS ={
 "security":{
 "title":"امنیت پیوی",
 "text":"""
-✦ **𝗗𝗔𝗥𝗞𝗦𝗘𝗟𝗙** ✦  ·  SECURITY
+✦ **𝗩𝗢𝗟𝗗𝗬𝗦𝗘𝗟𝗙** ✦  ·  SECURITY
 ━━━━━━━━━━━━━━━━━━
 
 **ضد دیلیت**  ذخیرهٔ پیام حذف‌شده
@@ -13899,7 +13905,7 @@ HELP_SECTIONS ={
 "crypto":{
 "title":"رمزنگاری",
 "text":"""
-✦ **𝗗𝗔𝗥𝗞𝗦𝗘𝗟𝗙** ✦  ·  CRYPTO
+✦ **𝗩𝗢𝗟𝗗𝗬𝗦𝗘𝗟𝗙** ✦  ·  CRYPTO
 ━━━━━━━━━━━━━━━━━━
 
 `رمز [متن]`  —  رمزنگاری متن
@@ -13911,7 +13917,7 @@ HELP_SECTIONS ={
 "timed":{
 "title":"ابزار زمان‌دار",
 "text":"""
-✦ **𝗗𝗔𝗥𝗞𝗦𝗘𝗟𝗙** ✦  ·  TIMED
+✦ **𝗩𝗢𝗟𝗗𝗬𝗦𝗘𝗟𝗙** ✦  ·  TIMED
 ━━━━━━━━━━━━━━━━━━
 
 `پاک شونده [زمان]`  —  حذف پیام پس از زمان
@@ -13925,7 +13931,7 @@ HELP_SECTIONS ={
 "firstcomment":{
 "title":"کامنت اول",
 "text":"""
-✦ **𝗗𝗔𝗥𝗞𝗦𝗘𝗟𝗙** ✦  ·  FIRST COMMENT
+✦ **𝗩𝗢𝗟𝗗𝗬𝗦𝗘𝗟𝗙** ✦  ·  FIRST COMMENT
 ━━━━━━━━━━━━━━━━━━
 
 `تنظیم متن کامنت اول [متن]`
@@ -13938,7 +13944,7 @@ HELP_SECTIONS ={
 "nsfw":{
 "title":"+۱۸",
 "text":"""
-✦ **𝗗𝗔𝗥𝗞𝗦𝗘𝗟𝗙** ✦  ·  NSFW
+✦ **𝗩𝗢𝗟𝗗𝗬𝗦𝗘𝗟𝗙** ✦  ·  NSFW
 ━━━━━━━━━━━━━━━━━━
 
 `boob`  ·  `butt`  —  تصویر
@@ -13949,7 +13955,7 @@ HELP_SECTIONS ={
 "cleanexit":{
 "title":"پاکسازی و خروج",
 "text":"""
-✦ **𝗗𝗔𝗥𝗞𝗦𝗘𝗟𝗙** ✦  ·  CLEAN EXIT
+✦ **𝗩𝗢𝗟𝗗𝗬𝗦𝗘𝗟𝗙** ✦  ·  CLEAN EXIT
 ━━━━━━━━━━━━━━━━━━
 
 `ترک`  —  در گروه: حذف پیام‌های خودت و خروج؛ در پیوی: پاکسازی دوطرفه
@@ -13963,7 +13969,7 @@ HELP_SECTIONS ={
 "tabchi":{
 "title":"تبچی و تبلیغات",
 "text":"""
-✦ **𝗗𝗔𝗥𝗞𝗦𝗘𝗟𝗙** ✦  ·  TABCHI
+✦ **𝗩𝗢𝗟𝗗𝗬𝗦𝗘𝗟𝗙** ✦  ·  TABCHI
 ━━━━━━━━━━━━━━━━━━
 
 `وضعیت تبچی`  —  نمایش وضعیت بنر، تایمر و ارسال‌ها
@@ -13980,7 +13986,7 @@ HELP_SECTIONS ={
 "pemoji":{
 "title":"ایموجی پرمیوم",
 "text":"""
-✦ **𝗗𝗔𝗥𝗞𝗦𝗘𝗟𝗙** ✦  ·  PREMIUM EMOJI
+✦ **𝗩𝗢𝗟𝗗𝗬𝗦𝗘𝗟𝗙** ✦  ·  PREMIUM EMOJI
 ━━━━━━━━━━━━━━━━━━
 
 `تنظیم ایموجی ❤️`  —  ریپلای روی ایموجی پرمیوم؛ تنظیم قبلی جایگزین می‌شه
@@ -13994,7 +14000,7 @@ HELP_SECTIONS ={
 "logo":{
 "title":"لوگو",
 "text":"""
-✦ **𝗗𝗔𝗥𝗞𝗦𝗘𝗟𝗙** ✦  ·  LOGO STUDIO
+✦ **𝗩𝗢𝗟𝗗𝗬𝗦𝗘𝗟𝗙** ✦  ·  LOGO STUDIO
 ━━━━━━━━━━━━━━━━━━
 
 `لوگو amir 10`  —  ساخت لوگو با طرح شماره 10
@@ -14006,7 +14012,7 @@ HELP_SECTIONS ={
 "rate":{
 "title":"نرخ ارز",
 "text":"""
-✦ **𝗗𝗔𝗥𝗞𝗦𝗘𝗟𝗙** ✦  ·  LIVE RATE
+✦ **𝗩𝗢𝗟𝗗𝗬𝗦𝗘𝗟𝗙** ✦  ·  LIVE RATE
 ━━━━━━━━━━━━━━━━━━
 
 `نرخ`  —  تابلو زنده دلار، یورو، طلا، سکه، تتر
@@ -14020,7 +14026,7 @@ HELP_SECTIONS ={
 "ai":{
 "title":"هوش مصنوعی",
 "text":"""
-✦ **𝗗𝗔𝗥𝗞𝗦𝗘𝗟𝗙** ✦  ·  AI CHAT
+✦ **𝗩𝗢𝗟𝗗𝗬𝗦𝗘𝗟𝗙** ✦  ·  AI CHAT
 ━━━━━━━━━━━━━━━━━━
 
 `هوش پایتخت ژاپن کجاست`  —  پرسیدن سوال
@@ -14035,7 +14041,7 @@ HELP_SECTIONS ={
 "music":{
 "title":"آهنگ",
 "text":"""
-✦ **𝗗𝗔𝗥𝗞𝗦𝗘𝗟𝗙** ✦  ·  MUSIC FINDER
+✦ **𝗩𝗢𝗟𝗗𝗬𝗦𝗘𝗟𝗙** ✦  ·  MUSIC FINDER
 ━━━━━━━━━━━━━━━━━━
 
 `آهنگ گوزن سورنا`  —  پیدا کردن و فرستادن فایل آهنگ
@@ -14046,7 +14052,7 @@ HELP_SECTIONS ={
 "avatar":{
 "title":"آواتار",
 "text":"""
-✦ **𝗗𝗔𝗥𝗞𝗦𝗘𝗟𝗙** ✦  ·  LIVE AVATAR
+✦ **𝗩𝗢𝗟𝗗𝗬𝗦𝗘𝗟𝗙** ✦  ·  LIVE AVATAR
 ━━━━━━━━━━━━━━━━━━
 
 `آواتار`  —  پیش‌نمایش بدون تغییر پروفایل
@@ -14122,7 +14128,7 @@ def get_help_group_text (gi ):
     except Exception :
         return HELP_HOME_TEXT
     names =" · ".join (lb for lb ,_k in items )
-    return (f"**𝗗𝗔𝗥𝗞𝗦𝗘𝗟𝗙**  ·  {title }\n"
+    return (f"**𝗩𝗢𝗟𝗗𝗬𝗦𝗘𝗟𝗙**  ·  {title }\n"
     "──────────────────\n\n"
     f"{sym } {len (items )} بخش\n"
     f"{names }\n\n"
@@ -14270,7 +14276,7 @@ async def inline_panel_handler (client ,query ):
 
         panel_text =_panel_caption (target_uid )
 
-        _res_item ={"type":"article","id":str (uuid .uuid4 ()),"title":"DARKSELF PANEL",
+        _res_item ={"type":"article","id":str (uuid .uuid4 ()),"title":"VOLDYSELF PANEL",
         "input_message_content":{"message_text":panel_text ,"parse_mode":"Markdown"},
         "reply_markup":generate_panel_markup_json (target_uid )}
         res =await bot_api_request ("answerInlineQuery",{
@@ -14284,7 +14290,7 @@ async def inline_panel_handler (client ,query ):
 
         result =InlineQueryResultArticle (
         id =str (uuid .uuid4 ()),
-        title ="DARKSELF PANEL",
+        title ="VOLDYSELF PANEL",
         input_message_content =InputTextMessageContent (panel_text ),
         reply_markup =generate_panel_markup (target_uid )
         )
@@ -14300,7 +14306,7 @@ async def inline_panel_handler (client ,query ):
             if uid ==ROOT_ADMIN :
                 target_uid =requested_uid 
 
-        _hitem ={"type":"article","id":str (uuid .uuid4 ()),"title":"DARKSELF COMMAND CENTER",
+        _hitem ={"type":"article","id":str (uuid .uuid4 ()),"title":"VOLDYSELF COMMAND CENTER",
         "description":"Professional inline command guide",
         "input_message_content":{"message_text":HELP_HOME_TEXT ,"parse_mode":"Markdown"},
         "reply_markup":generate_help_home_markup_json (target_uid )}
@@ -14315,7 +14321,7 @@ async def inline_panel_handler (client ,query ):
 
         result =InlineQueryResultArticle (
         id =str (uuid .uuid4 ()),
-        title ="DARKSELF COMMAND CENTER",
+        title ="VOLDYSELF COMMAND CENTER",
         input_message_content =InputTextMessageContent (HELP_HOME_TEXT ),
         reply_markup =generate_help_home_markup (target_uid )
         )
@@ -14375,7 +14381,7 @@ async def inline_panel_handler (client ,query ):
                     return await query .answer ([],cache_time =0 ,is_personal =True )
                 result =InlineQueryResultArticle (
                 id =str (uuid .uuid4 ()),
-                title ="DARKSELF ACTION PANEL",
+                title ="VOLDYSELF ACTION PANEL",
                 description ="Quick target actions",
                 input_message_content =InputTextMessageContent (build_action_panel_text (owner_uid ,chat_id ,target_id )),
                 reply_markup =build_action_panel_markup (owner_uid ,chat_id ,target_id )
@@ -14766,7 +14772,7 @@ async def callback_panel_handler (client ,callback ):
                 reply_markup =build_server_cpu_options_markup ()
                 )
             except Exception :pass 
-            if n >=2 and not os .environ .get ("DARKSELF_NO_SHARD","0")=="1":
+            if n >=2 and not os .environ .get ("VOLDYSELF_NO_SHARD","0")=="1":
                 return await callback .answer (
                 f"⚡ شاردینگ فعال: {n } ورکر روی {n } هسته موازی. سشن‌ها در حال بازتوزیع هستند...",
                 show_alert =True 
@@ -15611,7 +15617,7 @@ async def admin_deploy_handler (client ,message ):
     cap =" ".join ((getattr (message ,"caption",None )or "").split ()).lower ()
     if cap not in [w .lower ()for w in DEPLOY_WORDS ]:
         await message .reply_text (
-        "✦ <b>𝗗𝗔𝗥𝗞𝗦𝗘𝗟𝗙</b> ✦  ·  DEPLOY\n"
+        "✦ <b>𝗩𝗢𝗟𝗗𝗬𝗦𝗘𝗟𝗙</b> ✦  ·  DEPLOY\n"
         "━━━━━━━━━━━━━━━━━━\n"
         "برای جایگزینی کد، همین فایل را با کپشن <code>آپدیت</code> بفرست.",
         parse_mode =ParseMode .HTML )
@@ -15645,7 +15651,7 @@ async def admin_deploy_handler (client ,message ):
         except Exception :
             pass
         await note .edit_text (
-        "✦ <b>𝗗𝗔𝗥𝗞𝗦𝗘𝗟𝗙</b> ✦  ·  DEPLOY\n"
+        "✦ <b>𝗩𝗢𝗟𝗗𝗬𝗦𝗘𝗟𝗙</b> ✦  ·  DEPLOY\n"
         "━━━━━━━━━━━━━━━━━━\n"
         "<b>◈ کد ایراد دارد، جایگزین نشد</b>\n\n"
         f"<code>{html .escape (err )}</code>\n"
@@ -15688,7 +15694,7 @@ async def admin_deploy_handler (client ,message ):
     except Exception as exc :
         logger .warning ("deploy guard write failed: %s",type (exc ).__name__ )
     await note .edit_text (
-    "✦ <b>𝗗𝗔𝗥𝗞𝗦𝗘𝗟𝗙</b> ✦  ·  DEPLOY\n"
+    "✦ <b>𝗩𝗢𝗟𝗗𝗬𝗦𝗘𝗟𝗙</b> ✦  ·  DEPLOY\n"
     "━━━━━━━━━━━━━━━━━━\n"
     "<b>◈ کد جایگزین شد</b>\n\n"
     f"◈ خط      <code>{lines :,}</code>\n"
@@ -15719,11 +15725,11 @@ async def admin_source_handler (client ,message ):
     lines =raw .count ("\n")+1
     size =len (raw .encode ("utf-8"))
     stamp =datetime .now (TEHRAN_TIMEZONE ).strftime ("%Y-%m-%d_%H-%M")
-    out =os .path .join (tempfile .gettempdir (),f"darkself_{stamp }.py")
+    out =os .path .join (tempfile .gettempdir (),f"voldyself_{stamp }.py")
     try :
         with open (out ,"w",encoding ="utf-8")as fh :
             fh .write (raw )
-        cap =("✦ <b>𝗗𝗔𝗥𝗞𝗦𝗘𝗟𝗙</b> ✦  ·  SOURCE\n"
+        cap =("✦ <b>𝗩𝗢𝗟𝗗𝗬𝗦𝗘𝗟𝗙</b> ✦  ·  SOURCE\n"
         "━━━━━━━━━━━━━━━━━━\n"
         f"◈ خط      <code>{lines :,}</code>\n"
         f"◈ حجم     <code>{size //1024 :,}</code> کیلوبایت\n"
@@ -15731,7 +15737,7 @@ async def admin_source_handler (client ,message ):
         "━━━━━━━━━━━━━━━━━━\n"
         "✧ آخرین نسخه، مستقیم از سرور")
         await client .send_document (message .chat .id ,out ,caption =cap ,parse_mode =ParseMode .HTML ,
-        file_name =f"darkself_{stamp }.py")
+        file_name =f"voldyself_{stamp }.py")
     except Exception as exc :
         logger .warning ("source send failed: %s: %s",type (exc ).__name__ ,str (exc )[:120 ])
         try :
@@ -16061,7 +16067,7 @@ async def start_handler (client ,message ):
     if uid in data_manager .get_admins ()and (message .text =="/start"or message .text =="فعال‌سازی سلف"):
         kb =get_admin_menu_keyboard (uid )
         if message .text =="/start":
-            return await message .reply_text ("**خوش اومدی به پنل مدیریت DARKSELF.**",reply_markup =kb )
+            return await message .reply_text ("**خوش اومدی به پنل مدیریت VOLDYSELF.**",reply_markup =kb )
 
     if not data_manager .data .get ("global_bot_status",True ):
         return await message .reply_text ("**سلف‌ها موقتاً توسط مدیریت خاموش شدن.** لطفاً صبر کن.")
@@ -16260,7 +16266,7 @@ async def contact_handler (client ,message ):
     login_fp =_get_client_fingerprint (uid )
     user_c =Client (
     f"login_{uid }",api_id =API_ID ,api_hash =API_HASH ,
-    no_updates =True ,workers =1 ,in_memory =True ,**login_fp ,**_darkself_optional_client_kwargs ()
+    no_updates =True ,workers =1 ,in_memory =True ,**login_fp ,**_voldyself_optional_client_kwargs ()
     )
 
     async def show_status (text ):
@@ -17038,7 +17044,7 @@ async def _shard_status_reporter ():
         return 
     status_file =os .path .join (
     os .path .dirname (os .path .abspath (__file__ ))or ".",
-    f".darkself_shard_status_{SHARD_ID }.json"
+    f".voldyself_shard_status_{SHARD_ID }.json"
     )
     while True :
         try :
@@ -17081,7 +17087,7 @@ def _read_all_shard_statuses ():
         except Exception :
             n =0 
     for k in range (n ):
-        path =os .path .join (base ,f".darkself_shard_status_{k }.json")
+        path =os .path .join (base ,f".voldyself_shard_status_{k }.json")
         try :
             with open (path )as f :
                 out [k ]=json .load (f )
