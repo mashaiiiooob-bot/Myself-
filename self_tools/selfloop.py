@@ -81,11 +81,15 @@ def _parse_interval_spec(token):
 
 
 def _next_delay(cfg):
-    """فاصله‌ی واقعی تا ارسال بعدی: عدد ثابت، یا یک انتخاب تصادفی و متفاوت هر بار از داخل
-    بازه (هیچ‌وقت دقیقاً روی دو سر بازه نمی‌افتد)."""
+    """فاصله‌ی واقعی تا ارسال بعدی: عدد ثابت، یا یک انتخاب تصادفیِ پیوسته (نه فقط چند حالت
+    محدود/شمارشی، بلکه هر عدد اعشاری ممکن) از داخل بازه — هیچ‌وقت دقیقاً روی دو سر بازه
+    نمی‌افتد، و از بی‌نهایت مقدار ممکن بین آن دو مرز انتخاب می‌شود."""
     if "lo" in cfg and "hi" in cfg:
-        lo, hi = int(cfg["lo"]), int(cfg["hi"])
-        return random.randint(lo + 1, hi - 1) if hi - lo >= 2 else max(MIN_INTERVAL, lo)
+        lo, hi = float(cfg["lo"]), float(cfg["hi"])
+        if hi <= lo:
+            return max(MIN_INTERVAL, lo)
+        eps = min(0.25, (hi - lo) / 1000)  # تضمین می‌کند دقیقاً روی خودِ مرزها نیفتد
+        return random.uniform(lo + eps, hi - eps)
     return max(MIN_INTERVAL, int(cfg.get("interval") or DEFAULT_INTERVAL))
 
 

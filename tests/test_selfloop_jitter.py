@@ -12,12 +12,14 @@ def _run():
     cfg_fixed = {"interval": 90, "message": "x"}
     assert {sl._next_delay(cfg_fixed) for _ in range(50)} == {90}
 
-    # ranged interval: 5m-7m == 300s-420s
+    # ranged interval: 5m-7m == 300s-420s -> continuous (fractional-second) randomness,
+    # not a limited/countable set of whole-second values
     cfg = {"lo": 300, "hi": 420, "message": "x"}
     samples = [sl._next_delay(cfg) for _ in range(5000)]
+    assert all(isinstance(v, float) for v in samples)
     assert min(samples) > 300 and max(samples) < 420, (min(samples), max(samples))
     assert 300 not in samples and 420 not in samples
-    assert len(set(samples)) > 50, "should vary widely, not repeat the same value"
+    assert len(set(samples)) > 4990, "should be essentially all-unique (continuous), not a small fixed set"
 
     # parser: range, fixed, reversed order, too-narrow rejected, garbage rejected
     assert sl._parse_interval_spec("5m-7m") == {"lo": 300, "hi": 420}
