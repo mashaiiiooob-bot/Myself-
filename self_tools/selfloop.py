@@ -2,10 +2,15 @@
 ارسال خودکار دوره‌ای پیام در یک چت، با چند «اسلات» مستقل در هر چت — هرکدام با
 فاصله و متن خودش (مثل «تبچی» خودِ سلف، ولی قابل تنظیم روی هر چتی، جدا جدا).
 
+فاصله می‌تواند یک عدد ثابت باشد، یا یک بازه (مثل 5m-7m) که هر بار یک مقدار
+تصادفی و متفاوتِ داخل همان بازه انتخاب می‌شود (هیچ‌وقت دقیقاً روی دو سرِ بازه
+نمی‌افتد) تا ریتم ارسال ثابت و قابل‌تشخیص نباشد.
+
 /self_on                        -> اسلات 1 در همین چت، فاصله و متن پیش‌فرض
-/self_on 10m                    -> اسلات 1، فاصله‌ی سفارشی
+/self_on 10m                    -> اسلات 1، فاصله‌ی ثابت
+/self_on 5m-7m                  -> اسلات 1، فاصله‌ی تصادفی بین ۵ تا ۷ دقیقه
 /self_on 10m سلام به همه         -> اسلات 1، فاصله + متن سفارشی
-/self_on 2: 2m یخچال میویی       -> اسلات 2 (جدا از اسلات 1)، فاصله + متن خودش
+/self_on 2: 5m-7m یخچال میویی    -> اسلات 2 (جدا از اسلات 1)، فاصله + متن خودش
 /self_on 2:                     -> اسلات 2 با فاصله/متن پیش‌فرض
 
 /self_off                       -> خاموش‌کردن همه‌ی اسلات‌های همین چت
@@ -13,6 +18,7 @@
 /self_status                    -> فهرست همه‌ی چت‌ها و اسلات‌های فعال این سلف
 """
 import asyncio
+import random
 import re
 import time
 
@@ -28,6 +34,7 @@ except ImportError:
 DEFAULT_INTERVAL = 5 * 60
 DEFAULT_MESSAGE = "میو"
 MIN_INTERVAL = 60              # سقف پایین برای جلوگیری از اسپم/بن شدن حساب
+MIN_RANGE_GAP = 3              # کمترین فاصله‌ی مجاز بین دو سر بازه (تا نقطه‌ی داخلی واقعی وجود داشته باشد)
 MAX_SLOTS_PER_CHAT = 5         # سقف تعداد اسلات هم‌زمان در یک چت
 MAX_SLOTS_PER_SELF = 20        # سقف تعداد اسلات هم‌زمان در کل چت‌های این سلف
 
@@ -46,8 +53,45 @@ def _parse_interval(token):
     return n * _UNITS.get(unit, 1)
 
 
+def _fmt_dur(sec):
+    sec = int(sec)
+    m, s = divmod(sec, 60)
+    return f"{m}:{s:02d}"
+
+
+def _parse_interval_spec(token):
+    """یک فاصله‌ی ثابت ('10m') یا یک بازه‌ی نامنظم/جیتردار ('5m-7m') را می‌خواند.
+    خروجی: {"fixed": ثانیه}  یا  {"lo": ثانیه, "hi": ثانیه}  یا  None اگر نامعتبر بود."""
+    token = (token or "").strip()
+    if "-" in token:
+        lo_s, _, hi_s = token.partition("-")
+        lo, hi = _parse_interval(lo_s), _parse_interval(hi_s)
+        if lo is None or hi is None:
+            return None
+        if lo > hi:
+            lo, hi = hi, lo
+        lo = max(MIN_INTERVAL, lo)
+        if hi - lo < MIN_RANGE_GAP:
+            return None
+        return {"lo": lo, "hi": hi}
+    iv = _parse_interval(token)
+    if iv is None:
+        return None
+    return {"fixed": max(MIN_INTERVAL, iv)}
+
+
+def _next_delay(cfg):
+    """فاصله‌ی واقعی تا ارسال بعدی: عدد ثابت، یا یک انتخاب تصادفی و متفاوت هر بار از داخل
+    بازه (هیچ‌وقت دقیقاً روی دو سر بازه نمی‌افتد)."""
+    if "lo" in cfg and "hi" in cfg:
+        lo, hi = int(cfg["lo"]), int(cfg["hi"])
+        return random.randint(lo + 1, hi - 1) if hi - lo >= 2 else max(MIN_INTERVAL, lo)
+    return max(MIN_INTERVAL, int(cfg.get("interval") or DEFAULT_INTERVAL))
+
+
 def _parse_on_args(arg_str):
-    """-> (slot, interval-or-None, message-or-None) ؛ None یعنی «همان قبلی یا پیش‌فرض بماند».
+    """-> (slot, interval_spec-or-None, message-or-None) ؛ None یعنی «همان قبلی یا پیش‌فرض بماند».
+    interval_spec یا {"fixed": ثانیه} است یا {"lo":..,"hi":..} برای حالت تصادفیِ بازه‌ای.
     در خطای فرمت، ValueError با پیام فارسی قابل‌نمایش می‌اندازد."""
     s = (arg_str or "").strip()
     slot = 1
@@ -60,14 +104,17 @@ def _parse_on_args(arg_str):
     if not s:
         return slot, None, None
     parts = s.split(maxsplit=1)
-    iv = _parse_interval(parts[0])
-    if iv is None:
+    spec = _parse_interval_spec(parts[0])
+    if spec is None:
         raise ValueError(
-            "فرمت فاصله اشتباه است.\nمثال: `/self_on 10m سلام` یا برای اسلات دوم: `/self_on 2: 2m یخچال میویی`"
+            "فرمت فاصله اشتباه است.\n"
+            "فاصله‌ی ثابت: `/self_on 10m سلام`\n"
+            "فاصله‌ی نامنظم (تصادفی داخل بازه، برای جلوگیری از ریتم ثابت): `/self_on 5m-7m سلام`\n"
+            f"برای اسلات دوم: `/self_on 2: 5m-7m یخچال میویی`\n"
+            f"(هر دو سر بازه باید حداقل {MIN_RANGE_GAP} ثانیه فاصله داشته باشند)"
         )
-    interval = max(MIN_INTERVAL, iv)
     message = parts[1].strip() if len(parts) > 1 else None
-    return slot, interval, message
+    return slot, spec, message
 
 
 def _migrate_chat_state(chat_state):
@@ -123,14 +170,14 @@ async def _loop(client, g, uid, chat_id, slot):
                 continue
             except Exception:
                 return  # چت حذف شده / اخراج شده / دسترسی نداریم و... -> بی‌سروصدا متوقف شو
-            await asyncio.sleep(max(MIN_INTERVAL, int(cfg.get("interval") or DEFAULT_INTERVAL)))
+            await asyncio.sleep(_next_delay(cfg))
     except asyncio.CancelledError:
         pass
     finally:
         _TASKS.pop(key, None)
 
 
-def _start(client, g, uid, chat_id, slot, interval, message):
+def _start(client, g, uid, chat_id, slot, interval_spec, message):
     key = (uid, chat_id, slot)
     old = _TASKS.get(key)
     if old and not old.done():
@@ -138,7 +185,12 @@ def _start(client, g, uid, chat_id, slot, interval, message):
     state = _state(g, uid)
     chat_state = state.setdefault(str(chat_id), {})
     _migrate_chat_state(chat_state)
-    chat_state[str(slot)] = {"interval": interval, "message": message, "since": time.time()}
+    cfg = {"message": message, "since": time.time()}
+    if "lo" in interval_spec:
+        cfg["lo"], cfg["hi"] = interval_spec["lo"], interval_spec["hi"]
+    else:
+        cfg["interval"] = interval_spec["fixed"]
+    chat_state[str(slot)] = cfg
     _save(g, uid, state)
     _TASKS[key] = asyncio.create_task(_loop(client, g, uid, chat_id, slot))
 
@@ -154,13 +206,13 @@ async def on_handler(client, message):
     parts = (message.text or "").split(maxsplit=1)
     arg_str = parts[1] if len(parts) > 1 else ""
     try:
-        slot, interval, msg_text = _parse_on_args(arg_str)
+        slot, interval_spec, msg_text = _parse_on_args(arg_str)
     except ValueError as e:
         return await message.reply_text(str(e))
 
     key = (uid, chat_id, slot)
     already_on = key in _TASKS and not _TASKS[key].done()
-    if already_on and interval is None and msg_text is None:
+    if already_on and interval_spec is None and msg_text is None:
         return await message.reply_text(f"**اسلات {slot} همین چت از قبل روشنه 😎**")
 
     state = _state(g, uid)
@@ -175,11 +227,21 @@ async def on_handler(client, message):
             return await message.reply_text(f"❌ حداکثر {MAX_SLOTS_PER_SELF} اسلات هم‌زمان (در کل چت‌ها) مجاز است.")
 
     existing = chat_state.get(str(slot), {})
-    final_interval = interval if interval is not None else int(existing.get("interval") or DEFAULT_INTERVAL)
+    if interval_spec is not None:
+        final_spec = interval_spec
+    elif "lo" in existing:
+        final_spec = {"lo": existing["lo"], "hi": existing["hi"]}
+    else:
+        final_spec = {"fixed": int(existing.get("interval") or DEFAULT_INTERVAL)}
     final_message = msg_text if msg_text is not None else (existing.get("message") or DEFAULT_MESSAGE)
-    _start(client, g, uid, chat_id, slot, final_interval, final_message)
+    _start(client, g, uid, chat_id, slot, final_spec, final_message)
+
+    if "lo" in final_spec:
+        timing_txt = f"بین {_fmt_dur(final_spec['lo'])} تا {_fmt_dur(final_spec['hi'])} (هر بار تصادفی و متفاوت)"
+    else:
+        timing_txt = f"هر {_fmt_dur(final_spec['fixed'])}"
     await message.reply_text(
-        f"**اسلات {slot} روشن شد 🔥**\nفاصله: هر {final_interval} ثانیه\nمتن: «{final_message}»"
+        f"**اسلات {slot} روشن شد 🔥**\nفاصله: {timing_txt}\nمتن: «{final_message}»"
     )
 
 
@@ -239,7 +301,11 @@ async def status_handler(client, message):
         found = True
         lines.append(f"💬 چت `{cid_s}`:")
         for slot_s, cfg in sorted(chat_state.items(), key=lambda kv: int(kv[0])):
-            lines.append(f"  • اسلات {slot_s} — هر {cfg.get('interval', DEFAULT_INTERVAL)} ثانیه — «{str(cfg.get('message', DEFAULT_MESSAGE))[:30]}»")
+            if "lo" in cfg:
+                timing_txt = f"بین {_fmt_dur(cfg['lo'])} تا {_fmt_dur(cfg['hi'])}"
+            else:
+                timing_txt = f"هر {_fmt_dur(cfg.get('interval', DEFAULT_INTERVAL))}"
+            lines.append(f"  • اسلات {slot_s} — {timing_txt} — «{str(cfg.get('message', DEFAULT_MESSAGE))[:30]}»")
     if not found:
         return await message.reply_text("هیچ چت فعالی نداری.")
     await message.reply_text("\n".join(lines))
