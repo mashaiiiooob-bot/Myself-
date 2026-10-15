@@ -1,0 +1,306 @@
+diff --git a/bot.py b/bot.py
+index d6dedaf..3c6ad89 100644
+--- a/bot.py
++++ b/bot.py
+@@ -13614,6 +13614,9 @@ HELP_SECTIONS ={
+ `/self_off`  —  خاموش‌کردن همه‌ی اسلات‌های همین چت
+ `/self_off [شماره]`  —  خاموش‌کردن فقط همان اسلات
+ `/self_status`  —  فهرست همه‌ی چت‌ها و اسلات‌های فعال
++`/self_del [شماره] own`  —  پیام همان اسلات بلافاصله پاک شود (فقط گروهی که دسترسی حذف دارم)
++`/self_del [شماره] bot`  —  اولین پیام رباتِ بعد از آن پاک شود
++`/self_del [شماره] both`  —  هر دو  |  `off` برای خاموش
+ """.strip()
+ },
+ "meowgame":{
+diff --git a/miniapp/index.html b/miniapp/index.html
+index 52ee4f7..f4f6a96 100644
+--- a/miniapp/index.html
++++ b/miniapp/index.html
+@@ -116,7 +116,7 @@ const D={
+ "ابزار: رسانه":[["/qr [متن]","ساخت QR کد"],["/tr [متن]","ترجمه"],["/short [لینک]","کوتاه‌کردن لینک"],["/imgmeta","متادیتا و GPS عکس"],["/image [متن]","جستجوی تصویر"],["/voice [متن]","تبدیل متن به صدا"],["/ocr","استخراج متن از عکس"],["/removebg","حذف پس‌زمینه عکس"]],
+ "ابزار: هوش":[["/ai [سوال]","هوش مصنوعی"],["/prompt [متن]","شخصیت ثابت برای /ai"],["/remind [زمان] [متن]","یادآوری"],["/stop","لغو یادآوری"],["/fwd [چت‌ها]","فوروارد با سقف ایمن"]],
+ "دانلودر":[["دانلود [لینک]","دانلود ویدیو (یا ویدیو/dl)"],["صدا [لینک]","دانلود فقط صدا MP3 (یا mp3)"]],
+-"ارسال خودکار":[["/self_on","اسلات ۱، پیش‌فرض (هر ۵ دقیقه)"],["/self_on [زمان] [متن]","فاصله‌ی ثابت"],["/self_on [کم-زیاد] [متن]","فاصله‌ی تصادفی، مثل 5m-7m"],["/self_on 2: [زمان] [متن]","اسلات ۲ جدا (تا ۵ اسلات در هر چت)"],["/self_off","خاموش‌کردن همه‌ی اسلات‌های این چت"],["/self_off [شماره]","خاموش‌کردن فقط همان اسلات"],["/self_status","فهرست چت‌ها و اسلات‌های فعال"]],
++"ارسال خودکار":[["/self_on","اسلات ۱، پیش‌فرض (هر ۵ دقیقه)"],["/self_on [زمان] [متن]","فاصله‌ی ثابت"],["/self_on [کم-زیاد] [متن]","فاصله‌ی تصادفی، مثل 5m-7m"],["/self_on 2: [زمان] [متن]","اسلات ۲ جدا (تا ۵ اسلات در هر چت)"],["/self_off","خاموش‌کردن همه‌ی اسلات‌های این چت"],["/self_off [شماره]","خاموش‌کردن فقط همان اسلات"],["/self_status","فهرست چت‌ها و اسلات‌های فعال"],["/self_del [شماره] own","پاک‌کردن پیام همان اسلات (فقط گروهِ دارای دسترسی حذف)"],["/self_del [شماره] bot","پاک‌کردن اولین پیام رباتِ بعدی"],["/self_del [شماره] both","هر دو؛ off برای خاموش"]],
+ "بازی میو":[["میو روشن","فعال‌سازی بازی در این چت"],["میو","دریافت میو پوینت"],["ماهی","ماهی‌گیری"],["یخچال میویی","نمایش یخچال"],["بفروش ماهی","فروش ماهی‌های یخچال"],["ارتقا یخچال","ارتقای ظرفیت"],["برترین میو","لیدربرد چت"]]
+ };
+ const MEOW=[["میو روشن","روشن کردن بازی در این چت (فقط مالک)"],["میو خاموش","خاموش کردن بازی"],["میو","دریافت میو پوینت (هر ۳:۳۰)"],["ماهی","ماهی‌گیری و ذخیره در یخچال"],["یخچال میویی","نمایش یخچال و ماهی‌ها"],["بفروش ماهی","فروش ماهی‌های یخچال"],["ارتقا یخچال","ارتقای ظرفیت یخچال"],["میو پوینت","موجودی شما"],["برترین میو","لیدربرد چت"]];
+diff --git a/self_tools/selfloop.py b/self_tools/selfloop.py
+index e2944e2..4258404 100644
+--- a/self_tools/selfloop.py
++++ b/self_tools/selfloop.py
+@@ -16,6 +16,15 @@
+ /self_off                       -> خاموش‌کردن همه‌ی اسلات‌های همین چت
+ /self_off 2                     -> خاموش‌کردن فقط اسلات 2 در همین چت
+ /self_status                    -> فهرست همه‌ی چت‌ها و اسلات‌های فعال این سلف
++
++حذف خودکار (برای هر اسلات جدا تنظیم می‌شود، فقط در گروه‌هایی کار می‌کند که اکانت
++شما مالک یا ادمینِ دارای دسترسی «حذف پیام» است؛ در بقیه‌ی چت‌ها هیچ پیامی حذف نمی‌شود):
++/self_del 2 own                 -> پیامی که اسلات 2 می‌فرستد بلافاصله پاک شود
++/self_del 2 bot                 -> اولین پیامِ رباتیِ بعد از آن هم بلافاصله پاک شود
++/self_del 2 both                -> هر دو
++/self_del 2 off                 -> خاموش‌کردن حذف خودکار برای اسلات 2
++/self_del 2 own 3               -> پیام خودت را ۳ ثانیه بعد پاک کن (اختیاری، ۰ تا ۶۰)
++/self_del 2                     -> نمایش وضعیت حذف اسلات 2 و دسترسی فعلی
+ """
+ import asyncio
+ import random
+@@ -38,7 +47,13 @@ MIN_RANGE_GAP = 3              # کمترین فاصله‌ی مجاز بین د
+ MAX_SLOTS_PER_CHAT = 5         # سقف تعداد اسلات هم‌زمان در یک چت
+ MAX_SLOTS_PER_SELF = 20        # سقف تعداد اسلات هم‌زمان در کل چت‌های این سلف
+ 
++BOT_WAIT = 20                  # چند ثانیه منتظر پیامِ ربات بعد از ارسال می‌مانیم
++PERM_TTL = 300                 # مدت نگه‌داشتن نتیجه‌ی بررسی دسترسی حذف (ثانیه)
++MAX_OWN_DELAY = 60
++
+ _TASKS = {}   # (uid, chat_id, slot) -> asyncio.Task
++_WATCH = {}   # (uid, chat_id) -> [(msg_id_ارسالی, deadline)]  منتظر پیامِ ربات بعدی
++_PERM_CACHE = {}   # (uid, chat_id) -> (زمان, می‌تواند_حذف_کند)
+ _G = {}       # shared globals() of bot.py, captured در register()/resume()
+ 
+ _UNITS = {"s": 1, "m": 60, "h": 3600, "ثانیه": 1, "دقیقه": 60, "ساعت": 3600}
+@@ -152,6 +167,197 @@ def _active_gate(g, uid):
+     return status is None or status.get(uid, True)
+ 
+ 
++def _enum_name(x):
++    if x is None:
++        return None
++    name = getattr(x, "name", None) or str(x)
++    return str(name).split(".")[-1].upper()
++
++
++async def _can_delete(client, uid, chat_id, chat_type=None):
++    """True فقط اگر چت گروه/سوپرگروه باشد و اکانت ما مالک یا ادمینِ دارای دسترسی حذف پیام باشد."""
++    now = time.monotonic()
++    hit = _PERM_CACHE.get((uid, chat_id))
++    if hit and now - hit[0] < PERM_TTL:
++        return hit[1]
++    ok = False
++    try:
++        ctype = _enum_name(chat_type)
++        if ctype is None:
++            ctype = _enum_name((await client.get_chat(chat_id)).type)
++        if ctype in ("GROUP", "SUPERGROUP"):
++            member = await client.get_chat_member(chat_id, "me")
++            st = _enum_name(getattr(member, "status", None))
++            if st in ("OWNER", "CREATOR"):
++                ok = True
++            elif st == "ADMINISTRATOR":
++                priv = getattr(member, "privileges", None) or member
++                ok = bool(getattr(priv, "can_delete_messages", False))
++    except Exception:
++        ok = False
++    _PERM_CACHE[(uid, chat_id)] = (now, ok)
++    return ok
++
++
++async def _safe_delete(client, uid, chat_id, msg_id):
++    try:
++        await client.delete_messages(chat_id, msg_id)
++        return True
++    except Exception as e:
++        if type(e).__name__ in ("ChatAdminRequired", "MessageDeleteForbidden", "ChatWriteForbidden"):
++            _PERM_CACHE[(uid, chat_id)] = (time.monotonic(), False)
++        return False
++
++
++async def _delayed_delete(client, uid, chat_id, msg_id, delay):
++    await asyncio.sleep(delay)
++    await _safe_delete(client, uid, chat_id, msg_id)
++
++
++def _watch_add(uid, chat_id, msg_id):
++    now = time.monotonic()
++    lst = [w for w in _WATCH.get((uid, chat_id), []) if w[1] > now]
++    lst.append((msg_id, now + BOT_WAIT))
++    _WATCH[(uid, chat_id)] = lst[-5:]
++
++
++async def _after_send(client, uid, chat_id, cfg, sent):
++    """بعد از هر ارسالِ اسلات: طبق تنظیم همان اسلات، پیام خودمان را پاک می‌کند و/یا
++    منتظر اولین پیامِ رباتیِ بعدی می‌ماند تا آن را هم پاک کند."""
++    want_own, want_bot = bool(cfg.get("del_own")), bool(cfg.get("del_bot"))
++    if sent is None or not (want_own or want_bot):
++        return
++    ctype = getattr(getattr(sent, "chat", None), "type", None)
++    if not await _can_delete(client, uid, chat_id, ctype):
++        return
++    if want_bot:
++        _watch_add(uid, chat_id, sent.id)
++    if want_own:
++        delay = int(cfg.get("del_delay") or 0)
++        if delay > 0:
++            asyncio.create_task(_delayed_delete(client, uid, chat_id, sent.id, delay))
++        else:
++            await _safe_delete(client, uid, chat_id, sent.id)
++
++
++async def bot_reply_handler(client, message):
++    """هر پیامِ رباتیِ ورودی در گروه: اگر بعد از ارسالِ یک اسلات (با حذفِ ربات روشن) رسیده
++    باشد — یا ریپلای به همان پیام باشد — بلافاصله پاک می‌شود. فقط اولین پیام برای هر ارسال."""
++    uid = client.me.id
++    chat_id = message.chat.id
++    key = (uid, chat_id)
++    lst = _WATCH.get(key)
++    if not lst:
++        return
++    now = time.monotonic()
++    lst = [w for w in lst if w[1] > now]
++    reply_to = getattr(message, "reply_to_message_id", None)
++    hit = None
++    for w in lst:   # قدیمی‌ترین ارسال اول
++        if message.id <= w[0]:
++            continue
++        if reply_to is None or reply_to == w[0]:
++            hit = w
++            break
++    if hit is None:
++        if lst:
++            _WATCH[key] = lst
++        else:
++            _WATCH.pop(key, None)
++        return
++    lst.remove(hit)
++    if lst:
++        _WATCH[key] = lst
++    else:
++        _WATCH.pop(key, None)
++    if await _can_delete(client, uid, chat_id, getattr(message.chat, "type", None)):
++        await _safe_delete(client, uid, chat_id, message.id)
++
++
++_DEL_MODES = {
++    "own": (True, False), "خودم": (True, False), "پیام": (True, False),
++    "bot": (False, True), "ربات": (False, True),
++    "both": (True, True), "هردو": (True, True), "هر_دو": (True, True),
++    "off": (False, False), "خاموش": (False, False),
++}
++
++
++def _parse_del_args(arg_str):
++    """-> (slot, mode-or-None, delay-or-None). mode یکی از کلیدهای _DEL_MODES یا None (فقط نمایش)."""
++    toks = (arg_str or "").replace(":", " ").split()
++    slot = 1
++    if toks and toks[0].isdigit():
++        slot = int(toks.pop(0))
++        if not (1 <= slot <= MAX_SLOTS_PER_CHAT):
++            raise ValueError(f"شماره‌ی اسلات باید بین ۱ تا {MAX_SLOTS_PER_CHAT} باشد.")
++    if not toks:
++        return slot, None, None
++    mode = toks.pop(0).lower()
++    if mode not in _DEL_MODES:
++        raise ValueError(
++            "حالت نامعتبر است.\n"
++            "`/self_del 2 own` پیام خودِ اسلات\n"
++            "`/self_del 2 bot` پیامِ رباتِ بعدی\n"
++            "`/self_del 2 both` هر دو\n"
++            "`/self_del 2 off` خاموش\n"
++            "تأخیر اختیاری برای پیام خودت: `/self_del 2 own 3`"
++        )
++    delay = None
++    if toks:
++        m = re.fullmatch(r"(\d+)\s*(s|ثانیه)?", toks[0], re.I)
++        if not m or not (0 <= int(m.group(1)) <= MAX_OWN_DELAY):
++            raise ValueError(f"تأخیر باید عددی بین ۰ تا {MAX_OWN_DELAY} ثانیه باشد.")
++        delay = int(m.group(1))
++    return slot, mode, delay
++
++
++def _del_txt(cfg):
++    own, bot = bool(cfg.get("del_own")), bool(cfg.get("del_bot"))
++    if not (own or bot):
++        return "خاموش"
++    parts = []
++    if own:
++        d = int(cfg.get("del_delay") or 0)
++        parts.append("پیام خودم" + (f" (بعد از {d}ث)" if d else " (بلافاصله)"))
++    if bot:
++        parts.append("پیام رباتِ بعدی")
++    return " + ".join(parts)
++
++
++async def del_handler(client, message):
++    g = _G
++    uid = client.me.id
++    chat_id = message.chat.id
++    parts = (message.text or "").split(maxsplit=1)
++    try:
++        slot, mode, delay = _parse_del_args(parts[1] if len(parts) > 1 else "")
++    except ValueError as e:
++        return await message.reply_text(str(e))
++    state = _state(g, uid)
++    chat_state = state.get(str(chat_id))
++    if isinstance(chat_state, dict):
++        _migrate_chat_state(chat_state)
++    cfg = chat_state.get(str(slot)) if isinstance(chat_state, dict) else None
++    if not cfg:
++        return await message.reply_text(f"اسلات {slot} در این چت روشن نیست. اول `/self_on {slot}:` را بزن.")
++    if mode is not None:
++        own, bot = _DEL_MODES[mode]
++        cfg["del_own"], cfg["del_bot"] = own, bot
++        if delay is not None:
++            cfg["del_delay"] = delay
++        if not own:
++            cfg.pop("del_delay", None)
++        if not (own or bot):
++            cfg.pop("del_own", None)
++            cfg.pop("del_bot", None)
++        _save(g, uid, state)
++    _PERM_CACHE.pop((uid, chat_id), None)
++    can = await _can_delete(client, uid, chat_id, getattr(message.chat, "type", None))
++    perm = ("✅ در این چت دسترسی حذف پیام دارم." if can else
++            "⚠️ این چت گروه نیست یا دسترسی «حذف پیام» ندارم؛ تا آن را نگیرم هیچ پیامی پاک نمی‌شود.")
++    await message.reply_text(f"**اسلات {slot} — حذف خودکار:** {_del_txt(cfg)}\n{perm}")
++
++
+ async def _loop(client, g, uid, chat_id, slot):
+     key = (uid, chat_id, slot)
+     try:
+@@ -168,12 +374,16 @@ async def _loop(client, g, uid, chat_id, slot):
+                 await asyncio.sleep(10)
+                 continue
+             try:
+-                await client.send_message(chat_id, cfg.get("message") or DEFAULT_MESSAGE)
++                sent = await client.send_message(chat_id, cfg.get("message") or DEFAULT_MESSAGE)
+             except FloodWait as fw:
+                 await asyncio.sleep(int(getattr(fw, "value", 30) or 30) + 2)
+                 continue
+             except Exception:
+                 return  # چت حذف شده / اخراج شده / دسترسی نداریم و... -> بی‌سروصدا متوقف شو
++            try:
++                await _after_send(client, uid, chat_id, cfg, sent)
++            except Exception:
++                pass    # خطای حذف نباید حلقه‌ی ارسال را بکشد
+             await asyncio.sleep(_next_delay(cfg))
+     except asyncio.CancelledError:
+         pass
+@@ -189,7 +399,11 @@ def _start(client, g, uid, chat_id, slot, interval_spec, message):
+     state = _state(g, uid)
+     chat_state = state.setdefault(str(chat_id), {})
+     _migrate_chat_state(chat_state)
++    prev = chat_state.get(str(slot)) or {}
+     cfg = {"message": message, "since": time.time()}
++    for k in ("del_own", "del_bot", "del_delay"):
++        if prev.get(k):
++            cfg[k] = prev[k]
+     if "lo" in interval_spec:
+         cfg["lo"], cfg["hi"] = interval_spec["lo"], interval_spec["hi"]
+     else:
+@@ -309,7 +523,8 @@ async def status_handler(client, message):
+                 timing_txt = f"بین {_fmt_dur(cfg['lo'])} تا {_fmt_dur(cfg['hi'])}"
+             else:
+                 timing_txt = f"هر {_fmt_dur(cfg.get('interval', DEFAULT_INTERVAL))}"
+-            lines.append(f"  • اسلات {slot_s} — {timing_txt} — «{str(cfg.get('message', DEFAULT_MESSAGE))[:30]}»")
++            del_mark = f" — 🗑 {_del_txt(cfg)}" if (cfg.get("del_own") or cfg.get("del_bot")) else ""
++            lines.append(f"  • اسلات {slot_s} — {timing_txt} — «{str(cfg.get('message', DEFAULT_MESSAGE))[:30]}»{del_mark}")
+     if not found:
+         return await message.reply_text("هیچ چت فعالی نداری.")
+     await message.reply_text("\n".join(lines))
+@@ -345,3 +560,6 @@ def register(client):
+     client.add_handler(MessageHandler(on_handler, filters.me & filters.command("self_on", prefixes=["/", "."])), group=0)
+     client.add_handler(MessageHandler(off_handler, filters.me & filters.command("self_off", prefixes=["/", "."])), group=0)
+     client.add_handler(MessageHandler(status_handler, filters.me & filters.command("self_status", prefixes=["/", "."])), group=0)
++    client.add_handler(MessageHandler(del_handler, filters.me & filters.command("self_del", prefixes=["/", "."])), group=0)
++    # گروه -20: قبل از هندلرهایی که StopPropagation می‌اندازند اجرا شود
++    client.add_handler(MessageHandler(bot_reply_handler, filters.incoming & filters.bot & filters.group), group=-20)
