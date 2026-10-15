@@ -20,7 +20,7 @@
 حذف خودکار (برای هر اسلات جدا تنظیم می‌شود، فقط در گروه‌هایی کار می‌کند که اکانت
 شما مالک یا ادمینِ دارای دسترسی «حذف پیام» است؛ در بقیه‌ی چت‌ها هیچ پیامی حذف نمی‌شود):
 /self_del 2 own                 -> پیامی که اسلات 2 می‌فرستد بلافاصله پاک شود
-/self_del 2 bot                 -> اولین پیامِ رباتیِ بعد از آن هم بلافاصله پاک شود
+/self_del 2 bot                 -> اولین پیامِ رباتِ بعد از آن (تا ۳۰ ثانیه) پاک شود، چه ریپلای باشد چه نه
 /self_del 2 both                -> هر دو
 /self_del 2 off                 -> خاموش‌کردن حذف خودکار برای اسلات 2
 /self_del 2 own 3               -> پیام خودت را ۳ ثانیه بعد پاک کن (اختیاری، ۰ تا ۶۰)
@@ -47,12 +47,15 @@ MIN_RANGE_GAP = 3              # کمترین فاصله‌ی مجاز بین د
 MAX_SLOTS_PER_CHAT = 5         # سقف تعداد اسلات هم‌زمان در یک چت
 MAX_SLOTS_PER_SELF = 20        # سقف تعداد اسلات هم‌زمان در کل چت‌های این سلف
 
-BOT_WAIT = 20                  # چند ثانیه منتظر پیامِ ربات بعد از ارسال می‌مانیم
+BOT_WAIT = 30                  # چند ثانیه منتظر پیامِ ربات بعد از ارسال می‌مانیم
+MAX_RECENT_BOT = 30
+BOT_HANDLER_GROUP = -95        # بعد از chat_tracker(-100) و قبل از بقیه‌ی هندلرهایی که StopPropagation می‌اندازند
 PERM_TTL = 300                 # مدت نگه‌داشتن نتیجه‌ی بررسی دسترسی حذف (ثانیه)
 MAX_OWN_DELAY = 60
 
 _TASKS = {}   # (uid, chat_id, slot) -> asyncio.Task
-_WATCH = {}   # (uid, chat_id) -> [(msg_id_ارسالی, deadline)]  منتظر پیامِ ربات بعدی
+_WATCH = {}   # (uid, chat_id) -> [[msg_id_ارسالی, deadline, answered], ...]  منتظر پیامِ ربات
+_RECENT_BOT = {}   # (uid, chat_id) -> [(msg_id, reply_to_موثر, زمان)]  پیام‌های رباتیِ تازه (برای رباتِ سریع)
 _PERM_CACHE = {}   # (uid, chat_id) -> (زمان, می‌تواند_حذف_کند)
 _G = {}       # shared globals() of bot.py, captured در register()/resume()
 
@@ -200,13 +203,19 @@ async def _can_delete(client, uid, chat_id, chat_type=None):
 
 
 async def _safe_delete(client, uid, chat_id, msg_id):
-    try:
-        await client.delete_messages(chat_id, msg_id)
-        return True
-    except Exception as e:
-        if type(e).__name__ in ("ChatAdminRequired", "MessageDeleteForbidden", "ChatWriteForbidden"):
-            _PERM_CACHE[(uid, chat_id)] = (time.monotonic(), False)
-        return False
+    for attempt in (1, 2):
+        try:
+            await client.delete_messages(chat_id, msg_id)
+            return True
+        except FloodWait as fw:
+            if attempt == 2:
+                return False
+            await asyncio.sleep(min(int(getattr(fw, "value", 5) or 5) + 1, 60))
+        except Exception as e:
+            if type(e).__name__ in ("ChatAdminRequired", "MessageDeleteForbidden", "ChatWriteForbidden"):
+                _PERM_CACHE[(uid, chat_id)] = (time.monotonic(), False)
+            return False
+    return False
 
 
 async def _delayed_delete(client, uid, chat_id, msg_id, delay):
@@ -214,24 +223,104 @@ async def _delayed_delete(client, uid, chat_id, msg_id, delay):
     await _safe_delete(client, uid, chat_id, msg_id)
 
 
+def _effective_reply_to(message):
+    """reply_to واقعی. در گروه‌های تاپیک‌دار، پیامِ بدون ریپلای هم reply_to == شناسه‌ی تاپیک دارد؛
+    آن را «بدون ریپلای» حساب می‌کنیم."""
+    rt = getattr(message, "reply_to_message_id", None)
+    root = getattr(message, "message_thread_id", None) or getattr(message, "reply_to_top_message_id", None)
+    if rt is not None and root is not None and rt == root:
+        return None
+    return rt
+
+
+def _wants_bot(uid, chat_id):
+    """آیا در این چت اسلاتی با حذفِ پیام ربات روشن است؟ (برای ذخیره‌ی پیام‌های رباتِ سریع)"""
+    if _WATCH.get((uid, chat_id)):
+        return True
+    try:
+        st = _state(_G, uid).get(str(chat_id))
+        return isinstance(st, dict) and any(isinstance(c, dict) and c.get("del_bot") for c in st.values())
+    except Exception:
+        return False
+
+
 def _watch_add(uid, chat_id, msg_id):
     now = time.monotonic()
     lst = [w for w in _WATCH.get((uid, chat_id), []) if w[1] > now]
-    lst.append((msg_id, now + BOT_WAIT))
+    lst.append([msg_id, now + BOT_WAIT, False])
     _WATCH[(uid, chat_id)] = lst[-5:]
+
+
+def _watch_drop(uid, chat_id, msg_id):
+    lst = [w for w in _WATCH.get((uid, chat_id), []) if w[0] != msg_id]
+    if lst:
+        _WATCH[(uid, chat_id)] = lst
+    else:
+        _WATCH.pop((uid, chat_id), None)
+
+
+def _pick_watcher(watchers, msg_id, reply_to):
+    """ملاک: «پیامِ بعدیِ ربات». اولین پیامِ رباتیِ بعد از ارسالِ ما پاک می‌شود، چه ریپلای باشد چه نه
+    (حتی اگر ریپلای به پیامِ دیگری باشد). علاوه بر آن، ریپلای‌های مستقیمِ بعدی به همان پیامِ ما هم
+    مال ماست و پاک می‌شوند."""
+    if reply_to is not None:
+        for w in watchers:
+            if reply_to == w[0] and msg_id > w[0]:
+                return w
+    for w in watchers:               # قدیمی‌ترین ارسالِ هنوز بی‌پاسخ که قدیمی‌تر از این پیام است
+        if not w[2] and msg_id > w[0]:
+            return w
+    return None
+
+
+async def _drain_bot(client, uid, chat_id, chat_type=None):
+    """پیام‌های رباتیِ ذخیره‌شده را با ارسال‌های منتظر تطبیق می‌دهد و تطبیق‌خورده‌ها را پاک می‌کند.
+    هم از هندلرِ پیام ربات و هم از _after_send صدا زده می‌شود، پس ترتیبِ رسیدن مهم نیست."""
+    key = (uid, chat_id)
+    now = time.monotonic()
+    watchers = [w for w in _WATCH.get(key, []) if w[1] > now]
+    if watchers:
+        _WATCH[key] = watchers
+    else:
+        _WATCH.pop(key, None)
+    keep, hits = [], []
+    for b in _RECENT_BOT.get(key, []):
+        if now - b[2] >= BOT_WAIT + 5:
+            continue
+        w = _pick_watcher(watchers, b[0], b[1])
+        if w is None:
+            keep.append(b)
+        else:
+            w[2] = True
+            hits.append(b[0])
+    if keep:
+        _RECENT_BOT[key] = keep[-MAX_RECENT_BOT:]
+    else:
+        _RECENT_BOT.pop(key, None)
+    if hits and await _can_delete(client, uid, chat_id, chat_type):
+        for mid in hits:
+            await _safe_delete(client, uid, chat_id, mid)
 
 
 async def _after_send(client, uid, chat_id, cfg, sent):
     """بعد از هر ارسالِ اسلات: طبق تنظیم همان اسلات، پیام خودمان را پاک می‌کند و/یا
-    منتظر اولین پیامِ رباتیِ بعدی می‌ماند تا آن را هم پاک کند."""
+    منتظر پیامِ رباتیِ بعدی می‌ماند تا آن را هم پاک کند."""
     want_own, want_bot = bool(cfg.get("del_own")), bool(cfg.get("del_bot"))
     if sent is None or not (want_own or want_bot):
         return
     ctype = getattr(getattr(sent, "chat", None), "type", None)
-    if not await _can_delete(client, uid, chat_id, ctype):
+    if ctype is not None and _enum_name(ctype) not in ("GROUP", "SUPERGROUP"):
         return
     if want_bot:
+        # قبل از هر await ثبت کن: رباتِ سریع ممکن است همین حالا جواب داده باشد
         _watch_add(uid, chat_id, sent.id)
+    if not await _can_delete(client, uid, chat_id, ctype):
+        if want_bot:
+            _watch_drop(uid, chat_id, sent.id)
+            _RECENT_BOT.pop((uid, chat_id), None)
+        return
+    if want_bot:
+        await _drain_bot(client, uid, chat_id, ctype)   # جوابی که زودتر از ثبتِ ما رسیده بود
     if want_own:
         delay = int(cfg.get("del_delay") or 0)
         if delay > 0:
@@ -241,37 +330,21 @@ async def _after_send(client, uid, chat_id, cfg, sent):
 
 
 async def bot_reply_handler(client, message):
-    """هر پیامِ رباتیِ ورودی در گروه: اگر بعد از ارسالِ یک اسلات (با حذفِ ربات روشن) رسیده
-    باشد — یا ریپلای به همان پیام باشد — بلافاصله پاک می‌شود. فقط اولین پیام برای هر ارسال."""
+    """هر پیامِ رباتیِ ورودی در گروه را ذخیره می‌کند و با ارسال‌های منتظر تطبیق می‌دهد:
+    اولین پیامِ رباتِ بعد از ارسال (ریپلای یا بدون ریپلای) + ریپلای‌های مستقیمِ بعدی به پیامِ ما."""
     uid = client.me.id
     chat_id = message.chat.id
+    if not _wants_bot(uid, chat_id):
+        return
     key = (uid, chat_id)
-    lst = _WATCH.get(key)
-    if not lst:
-        return
     now = time.monotonic()
-    lst = [w for w in lst if w[1] > now]
-    reply_to = getattr(message, "reply_to_message_id", None)
-    hit = None
-    for w in lst:   # قدیمی‌ترین ارسال اول
-        if message.id <= w[0]:
-            continue
-        if reply_to is None or reply_to == w[0]:
-            hit = w
-            break
-    if hit is None:
-        if lst:
-            _WATCH[key] = lst
-        else:
-            _WATCH.pop(key, None)
-        return
-    lst.remove(hit)
-    if lst:
-        _WATCH[key] = lst
-    else:
-        _WATCH.pop(key, None)
-    if await _can_delete(client, uid, chat_id, getattr(message.chat, "type", None)):
-        await _safe_delete(client, uid, chat_id, message.id)
+    buf = [b for b in _RECENT_BOT.get(key, []) if now - b[2] < BOT_WAIT + 5]
+    buf.append((message.id, _effective_reply_to(message), now))
+    _RECENT_BOT[key] = buf[-MAX_RECENT_BOT:]
+    await _drain_bot(client, uid, chat_id, getattr(message.chat, "type", None))
+
+
+bot_reply_handler.force_group = BOT_HANDLER_GROUP
 
 
 _DEL_MODES = {
@@ -561,5 +634,5 @@ def register(client):
     client.add_handler(MessageHandler(off_handler, filters.me & filters.command("self_off", prefixes=["/", "."])), group=0)
     client.add_handler(MessageHandler(status_handler, filters.me & filters.command("self_status", prefixes=["/", "."])), group=0)
     client.add_handler(MessageHandler(del_handler, filters.me & filters.command("self_del", prefixes=["/", "."])), group=0)
-    # گروه -20: قبل از هندلرهایی که StopPropagation می‌اندازند اجرا شود
-    client.add_handler(MessageHandler(bot_reply_handler, filters.incoming & filters.bot & filters.group), group=-20)
+    # گروه جدا و زودهنگام (force_group): بعد از chat_tracker و قبل از هندلرهایی که StopPropagation می‌اندازند
+    client.add_handler(MessageHandler(bot_reply_handler, filters.incoming & filters.bot & filters.group), group=BOT_HANDLER_GROUP)

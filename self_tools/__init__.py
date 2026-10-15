@@ -14,7 +14,7 @@ MODULES = [
     "stats", "remind", "passgen", "pray", "tz", "short", "unit", "imgmeta",
     "ip", "weather", "crypto", "price", "wiki", "ai", "image", "voice", "ocr", "removebg",
     "userinfo", "chatinfo", "checkuser", "font", "ascii_art", "sumfix", "prompt", "fwd",
-    "selfloop",
+    "selfloop", "purge",
 ]
 
 
@@ -52,7 +52,7 @@ class _Registrar:
             return await cb(c, m)
 
         handler.callback = guarded
-        return self._c.add_handler(handler, group=self._group)
+        return self._c.add_handler(handler, group=getattr(cb, "force_group", self._group))
 
 
 def register_all(client, g=None, group=-6):
