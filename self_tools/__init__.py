@@ -14,7 +14,7 @@ MODULES = [
     "stats", "remind", "passgen", "pray", "tz", "short", "unit", "imgmeta",
     "ip", "weather", "crypto", "price", "wiki", "ai", "image", "voice", "ocr", "removebg",
     "userinfo", "chatinfo", "checkuser", "font", "ascii_art", "sumfix", "prompt", "fwd",
-    "selfloop", "purge",
+    "selfloop", "purge", "ttt_controller",
 ]
 
 
