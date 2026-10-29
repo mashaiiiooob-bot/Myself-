@@ -126,7 +126,7 @@ async def controller(client, message, env):
     if not await env.check_global_fjoin_for_user(uid, message):
         return
     cmd = env.get_cmd(uid, message.text or "")
-    m = re.match(r"^(?:دوز|ttt)(?:\s+(\S+))?(?:\s+(.*))?$", (cmd or "").strip(), re.S | re.I)
+    m = re.match(r"^(?:یادگیری\s+دوز|learn\s+ttt)(?:\s+(\S+))?(?:\s+(.*))?$", (cmd or "").strip(), re.S | re.I)
     if not m:
         return
     sub = (m.group(1) or "راهنما").lower()
