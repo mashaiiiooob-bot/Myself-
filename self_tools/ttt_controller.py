@@ -125,8 +125,21 @@ async def controller(client, message, env):
     uid = client.me.id
     if not await env.check_global_fjoin_for_user(uid, message):
         return
-    cmd = env.get_cmd(uid, message.text or "")
-    m = re.match(r"^(?:یادگیری\s+دوز|learn\s+ttt)(?:\s+(\S+))?(?:\s+(.*))?$", (cmd or "").strip(), re.S | re.I)
+    cmd = (env.get_cmd(uid, message.text or "") or "").strip()
+    # پشتیبانی از ترتیب جدید «یادگیری دوز ...»
+    if re.match(r"^یادگیری\s+دوز(?:\s|$)", cmd, re.I):
+        tail = re.sub(
+            r"^یادگیری\s+دوز\s*", "", cmd, count=1, flags=re.I
+        ).strip()
+        first = tail.split(None, 1)[0].lower() if tail else ""
+        if first in ("روشن", "خاموش", "شروع", "توقف", "on", "off"):
+            cmd = "دوز یادگیری " + tail
+        else:
+            cmd = "دوز " + tail
+    m = re.match(
+        r"^(?:دوز|ttt)(?:\s+(\S+))?(?:\s+(.*))?$",
+        cmd, re.S | re.I
+    )
     if not m:
         return
     sub = (m.group(1) or "راهنما").lower()
@@ -142,11 +155,11 @@ async def controller(client, message, env):
             if target:
                 chat = await resolve_chat(client, target)
                 if not chat:
-                    return await say("❌ گروه پیدا نشد یا عضو نشد. آدرس را به شکل <code>@username</code>، لینک دعوت یا آیدی عددی بده — یا داخل خود گروه فقط <code>دوز یادگیری روشن</code> بزن.")
+                    return await say("❌ گروه پیدا نشد یا عضو نشد. آدرس را به شکل <code>@username</code>، لینک دعوت یا آیدی عددی بده — یا داخل خود گروه فقط <code>یادگیری دوز روشن</code> بزن.")
                 cid, title = chat.id, getattr(chat, "title", "") or str(chat.id)
             else:
                 if getattr(message.chat, "type", None) in ("private", "bot") or str(getattr(message.chat, "type", "")).lower().endswith(("private", "bot")):
-                    return await say("📌 داخل گروهِ بازی بنویس <code>دوز یادگیری روشن</code> یا آدرس گروه را بده: <code>دوز یادگیری روشن @group</code>")
+                    return await say("📌 داخل گروهِ بازی بنویس <code>یادگیری دوز روشن</code> یا آدرس گروه را بده: <code>یادگیری دوز روشن @group</code>")
                 cid, title = message.chat.id, getattr(message.chat, "title", "") or str(message.chat.id)
             s.update(on=True, chat=cid, title=title)
             await say("⏳ در حال خواندن %d پیام آخر <b>%s</b>…" % (BACKFILL, html.escape(title)))
@@ -160,13 +173,13 @@ async def controller(client, message, env):
         if act in ("خاموش", "off", "توقف"):
             s["on"] = False; _save(env, uid, True)
             return await say("⏸ یادگیری خاموش شد. داده‌ها نگه داشته شد (<code>دوز پاک</code> برای حذف).")
-        return await say("<code>دوز یادگیری روشن</code> (داخل گروه) · <code>دوز یادگیری روشن @group</code> · <code>دوز یادگیری خاموش</code>")
+        return await say("<code>یادگیری دوز روشن</code> (داخل گروه) · <code>یادگیری دوز روشن @group</code> · <code>یادگیری دوز خاموش</code>")
 
     if sub in ("تحلیل", "analysis", "وضعیت", "status"):
         profs = [p for p in L.data["profiles"].values() if p["boards_seen"]]
         head_ = "📡 گروه: <b>%s</b> · %s · %d بورد\n\n" % (html.escape(s["title"] or "—"), "روشن" if s["on"] else "خاموش", L.data["n_obs"])
         if not profs:
-            return await say(head_ + "هنوز هیچ بورد ربات‌ی دیده نشده. یک بازی در گروه شروع کنید (یا بگذارید آدم‌ها بازی کنند) و دوباره بزنید.\nشروع: <code>دوز یادگیری روشن</code>")
+            return await say(head_ + "هنوز هیچ بورد ربات‌ی دیده نشده. یک بازی در گروه شروع کنید (یا بگذارید آدم‌ها بازی کنند) و دوباره بزنید.\nشروع: <code>یادگیری دوز روشن</code>")
         return await say(head_ + "\n\n".join(TL.summarize(p) for p in profs)[:3600])
 
     if sub in ("نمونه", "sample"):
@@ -205,7 +218,7 @@ async def controller(client, message, env):
         s["learn"].clear(); LEARNERS.pop(uid, None); _save(env, uid, True)
         return await say("🧹 همهٔ داده‌های یادگیری پاک شد.")
 
-    await say("🎓 <b>یادگیری ربات دوز</b>\n\n<code>دوز یادگیری روشن</code> — داخل گروهِ بازی؛ یا <code>دوز یادگیری روشن @group</code> / لینک دعوت\n<code>دوز یادگیری خاموش</code>\n"
+    await say("🎓 <b>یادگیری ربات دوز</b>\n\n<code>یادگیری دوز روشن</code> — داخل گروهِ بازی؛ یا <code>یادگیری دوز روشن @group</code> / لینک دعوت\n<code>یادگیری دوز خاموش</code>\n"
               "<code>دوز تحلیل</code> — ساختار صفحه، نمادها، callback، متن‌ها، سرعت و قدرت ربات\n<code>دوز بازی‌ها</code> — آخرین بازی‌های بازسازی‌شده\n<code>دوز مدل</code> — رفتار یادگرفته‌شده و تله‌ها\n"
               "<code>دوز نمونه</code> — فایل خام ساختار (برای اشکال‌یابی)\n<code>دوز پاک</code> — حذف داده‌ها\n\n"
               "فقط پیام‌های <b>ربات‌ها</b> بررسی می‌شود؛ نه پیام آدم‌ها. این بخش فقط یاد می‌گیرد و چیزی کلیک یا ارسال نمی‌کند.")
@@ -228,7 +241,7 @@ def register(client):
         filters.me
         & filters.text
         & filters.regex(
-            r"^(?:[/.]\s*)?(?:دوز|ttt)(?:\s|$)",
+            r"^(?:[/.]\s*)?(?:(?:یادگیری\s+دوز)|(?:دوز|ttt))(?:\s|$)",
             flags=re.I,
         )
     )
