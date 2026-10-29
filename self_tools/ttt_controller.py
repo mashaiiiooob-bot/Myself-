@@ -2,7 +2,7 @@
 Only messages sent by BOTS are analysed; human messages are never stored."""
 import asyncio, html, io, json, re, time
 from . import ttt_learn as TL
-from .common import head, parse_mode_html, fa_digits
+from .common import Env, head, parse_mode_html, fa_digits
 
 LEARNERS = {}                      # uid -> Learner (in-memory tracks, persisted profiles)
 LAST_SAVE = {}
@@ -209,3 +209,35 @@ async def controller(client, message, env):
               "<code>دوز تحلیل</code> — ساختار صفحه، نمادها، callback، متن‌ها، سرعت و قدرت ربات\n<code>دوز بازی‌ها</code> — آخرین بازی‌های بازسازی‌شده\n<code>دوز مدل</code> — رفتار یادگرفته‌شده و تله‌ها\n"
               "<code>دوز نمونه</code> — فایل خام ساختار (برای اشکال‌یابی)\n<code>دوز پاک</code> — حذف داده‌ها\n\n"
               "فقط پیام‌های <b>ربات‌ها</b> بررسی می‌شود؛ نه پیام آدم‌ها. این بخش فقط یاد می‌گیرد و چیزی کلیک یا ارسال نمی‌کند.")
+
+
+# Register tic-tac-toe learner handlers.
+def register(client):
+    from pyrogram import filters
+    from pyrogram.handlers import MessageHandler
+
+    env = Env(getattr(client, "g", {}) or {})
+
+    async def command_handler(c, message):
+        return await controller(c, message, env)
+
+    async def board_watcher(c, message):
+        return await watch(c, message, env)
+
+    command_filter = (
+        filters.me
+        & filters.text
+        & filters.regex(
+            r"^(?:[/.]\s*)?(?:دوز|ttt)(?:\s|$)",
+            flags=re.I,
+        )
+    )
+
+    client.add_handler(
+        MessageHandler(command_handler, command_filter)
+    )
+
+    client.add_handler(
+        MessageHandler(board_watcher, filters.all),
+        group=-99,
+    )
